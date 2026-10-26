@@ -139,7 +139,7 @@ function renderVeil() {
 
 function renderCrest() {
     $('crest').innerHTML = scytheSvg('', 'class="l"', { reach: .72 }) + scytheSvg('', 'class="r"', { reach: .72, mirror: true }) +
-        '<div class="obsidian"><img src="assets/flowers/obsidian-iris.webp" alt=""></div><span class="knot glass"></span>';
+        '<div class="obsidian"><img src="assets/flowers/obsidian-iris.webp" alt=""></div>';
 }
 
 function renderSillScythe() {

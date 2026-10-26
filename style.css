@@ -165,11 +165,9 @@ body { overflow-x: hidden; }
 .crest svg { position: absolute; top: 0; width: 112px; overflow: visible; z-index: 2; filter: drop-shadow(0 6px 7px rgba(110, 10, 30, .3)); }
 .crest svg.l { left: calc(50% - 108px); }
 .crest svg.r { left: calc(50% - 4px); }
-.crest .obsidian { position: absolute; left: 50%; top: 52px; width: 66px; transform: translateX(-50%); z-index: 1; }
-.crest .knot { position: absolute; left: 50%; top: 116px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; z-index: 3; background: radial-gradient(circle at 36% 30%, #fff 0 9%, #ffd0d8 15%, #e8506b 34%, #a3112f 70%, #560716); box-shadow: 0 2px 4px rgba(90, 0, 20, .45); }
+.crest .obsidian { position: absolute; left: 50%; top: 44px; width: 86px; transform: translateX(-50%); z-index: 3; }
 
 .obsidian { position: absolute; left: 50%; top: 14px; width: 66px; transform: translateX(-50%); z-index: 1; }
-.crest .knot { position: absolute; left: 50%; top: 86px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; z-index: 3; background: radial-gradient(circle at 36% 30%, #fff 0 9%, #ffd0d8 15%, #e8506b 34%, #a3112f 70%, #560716); box-shadow: 0 2px 4px rgba(90, 0, 20, .45); }
 
 .obsidian { --obsidian-mask: url(assets/flowers/obsidian-iris.webp); filter: drop-shadow(0 6px 6px rgba(20, 10, 30, .35)); }
 .obsidian img { display: block; width: 100%; }
