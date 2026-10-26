@@ -1,0 +1,1004 @@
+const FLOWER = {
+    'underfoot-leverage': ['098', 1], 'silent-poise': ['054', 1], 'crimson-reservoir': ['124', 1], 'blood-spiral-lash': ['040', 1], 'martyrs-resonance': ['012', 1],
+    'sanguine-step': ['009', 1], 'shared-suffocation': ['107', 1], 'despondent-tremor': ['109', 0], 'gaze-of-the': ['025', 0], 'parry-the-unbidden': ['053', 1],
+    'vessels-attunement': ['117', 0], 'subvocal-incantation': ['029', 1], 'votive-renewal': ['017', 1], 'the-stolen-word': ['134', 0], 'chorus-of-shattered-glass': ['143', 1],
+    'parlor-guise': ['104', 0], 'crescent-sickle-conversion': ['031', 0], 'adaptive-scale': ['039', 0], 'sanguine-recall': ['135', 0],
+    'crystalline-edge-piercing': ['065', 0], 'crystalline-edge-pure-vitae': ['079', 0], 'crystalline-edge-tuning-glass': ['015', 0],
+    'a-playful-scolding-bandages': ['087', 1, 'note'], 'sorbet-on-the-promenade': ['132', 0, 'ticket'], 'a-charcoal-keepsake': ['004', 0, 'sketch'],
+    'tea-market-gossip-in-the-conservatory': ['078', 0, 'card'], 'a-tailored-fitting': ['022', 0, 'ribbon'], 'a-wax-sealed-care-parcel': ['141', 0, 'tag'],
+    'a-whispered-yearning': ['142', 0, 'letter'], 'the-private-opera-box': ['129', 1, 'ticket'], 'the-royal-envoys-masquerade': ['127', 0, 'invite'],
+    'whims-of-a-loyal-servant': ['137', 0, 'letter'],
+    'tainted-vitality': ['020', 0], 'the-expressive-muse': ['118', 1]
+};
+
+const TIER_ART = [['009', 1], ['029', 1], ['001', 0], ['039', 0], ['129', 1], ['124', 1], ['obsidian-iris', 1]];
+
+const VEIL = [
+    ['129', 10, 4, 62, 160, 3], ['050', 48, 2, 58, 172, 5], ['053', 8, 18, 60, -12, 2], ['118', 6, 32, 58, -24, 4],
+    ['087', 18, 46, 64, 8, 5], ['143', 40, 58, 70, -6, 2], ['107', 86, 62, 66, 12, 3], ['040', 12, 60, 60, 20, 4],
+    ['017', 66, 70, 66, -10, 5], ['098', 30, 72, 58, 14, 3], ['116', 92, 76, 62, -16, 2], ['012', 6, 80, 46, -8, 5],
+    ['029', 50, 84, 66, 6, 4], ['053', 80, 88, 70, -14, 3], ['126', 20, 92, 64, 10, 2], ['129', 60, 98, 70, -4, 4],
+    ['143', 88, 100, 74, 8, 2], ['107', 36, 100, 66, -12, 3], ['118', 96, 28, 56, 22, 4], ['054', 26, 8, 56, 150, 2],
+    ['091', 90, 14, 52, 18, 6], ['087', 30, 24, 62, -18, 6], ['040', 60, 52, 60, 10, 6], ['009', 90, 48, 56, -12, 6],
+    ['124', 62, 26, 88, 6, 7], ['009', 80, 38, 52, 24, 7], ['017', 44, 40, 58, -10, 7]
+];
+
+const LATCH = [[52, 34, 4], [80, 104, -3], [46, 174, 2], [76, 244, -4], [50, 314, 3], [80, 384, -2]];
+
+let pages = [];
+let shown = 0;
+let grantOpen = false;
+let sealedAt = 0;
+
+const $ = id => document.getElementById(id);
+
+function hash(text) {
+    let h = 7;
+    for (const c of text) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return h;
+}
+
+function jitter(id, spread = .45) {
+    const h = hash(id);
+    return { rot: ((h % 9) - 4) * spread, shift: (h >> 3) % 4 * 8, sx: 4 + ((h >> 5) % 4) * 6 };
+}
+
+function hearts(text) {
+    return escapeHtml(text).replace(/&lt;3/g, '<span class="heart">&#9829;</span>');
+}
+
+function plain(title) {
+    return title.replace(/\s*\([^)]*\)\s*$/, '');
+}
+
+function aside(title) {
+    return (title.match(/\(([^)]*)\)\s*$/) || [])[1] || '';
+}
+
+function art(file, cut) {
+    const src = file === 'obsidian-iris' ? 'assets/flowers/obsidian-iris.webp' : `assets/${cut ? 'flowers/f' : 'plates/p'}${file}.webp`;
+    return `<img src="${src}" alt="" loading="lazy">`;
+}
+
+function label(pattern) {
+    return (bond.ledger.rows.find(r => pattern.test(r.label)) || {}).label || '';
+}
+
+function phrase(text, pattern) {
+    return (String(text).match(pattern) || [''])[0];
+}
+
+function appointmentNote() {
+    const rule = bond.rules.items.find(r => /Loadout/i.test(r.name));
+    return rule ? phrase(rule.text, /requires an appointment with her/i) : '';
+}
+
+function audienceNote() {
+    return phrase(bond.tiers.text.join(' '), /requires Lady Morvelle's Favor and a personal audience/i);
+}
+
+function boxLabel(item, role) {
+    const box = item.boxes.find(b => b.role === role);
+    return box ? box.label : '';
+}
+
+function refillChoice() {
+    const refill = (bond.weapon.stats.find(s => /Refilling/i.test(s.label)) || { children: [] }).children;
+    return refill.find(child => /Presence/i.test(child.head) === state.presence) || { head: '', body: '' };
+}
+
+function showTier(instant = false) {
+    const veil = $('veil');
+    if (instant) veil.classList.add('instant');
+    document.documentElement.style.setProperty('--tier', state.tier);
+    veil.querySelectorAll('.bloom').forEach(bloom => bloom.classList.toggle('fallen', state.tier >= Number(bloom.dataset.falls)));
+    if (instant) requestAnimationFrame(() => requestAnimationFrame(() => veil.classList.remove('instant')));
+}
+
+function renderVeil() {
+    $('veil').insertAdjacentHTML('beforeend', VEIL.map(([f, x, y, w, r, falls], i) => {
+        const flip = i % 3 === 1 ? ' flip' : '';
+        const dx = (x < 50 ? -1 : 1) * (20 + (i * 13) % 50);
+        const delay = ((i * 7) % 5) * .18;
+        return `<img class="bloom${flip}" data-falls="${falls}" src="assets/flowers/f${f}.webp" alt="" style="--x:${x}%;--y:${y}%;--w:${w}%;--r:${r}deg;--dx:${dx}px;--dr:${(i % 2 ? 1 : -1) * (30 + i * 3)}deg;--delay:${delay}s">`;
+    }).join(''));
+}
+
+function renderCrest() {
+    $('crest').innerHTML = scytheSvg('', 'class="l"', { reach: .72 }) + scytheSvg('', 'class="r"', { reach: .72, mirror: true }) +
+        '<div class="obsidian"><img src="assets/flowers/obsidian-iris.webp" alt=""></div><span class="knot glass"></span>';
+}
+
+function renderSillScythe() {
+    const max = maxCharges();
+    clampCharges();
+    const span = formOptions().reach;
+    const beads = Array.from({ length: max }, (_, i) => {
+        const [x, y] = rodPoint(span * (.14 + (max > 1 ? i * (.78 / (max - 1)) : 0)));
+        const full = i < state.charges;
+        return `<circle class="bead-svg" data-act="${full ? 'spend' : 'refill'}" cx="${x}" cy="${y}" r="12.5" fill="url(#bead-${full ? 'glass' : 'empty'})" stroke="${full ? '#4b0412' : '#9e1230'}" stroke-opacity="${full ? '.4' : '.55'}" stroke-width="${full ? 1 : 1.4}"${full ? ' filter="url(#bead-glow)"' : ''}/>`;
+    }).join('');
+    const choice = refillChoice();
+    const host = $('sill-scythe');
+    host.innerHTML = ownIds(`<svg viewBox="0 0 600 600"><g transform="rotate(${-ROD_ANGLE} ${ROD.x1} ${ROD.y1})">${scytheBody(beads, formOptions())}</g>${SCYTHE_DEFS}</svg>`) + `
+        <div class="charge-count">${escapeHtml(label(/^Current Charges/i))}<b>${state.charges} / ${max}</b>
+            <button class="price refill" data-act="refill"${state.charges >= max || state.favor < 1 || sealed ? ' disabled' : ''}><strong>${escapeHtml(choice.head)}:</strong> ${inline(choice.body)}</button>
+        </div>`;
+    fitSvg(host.querySelector('svg'), 14);
+}
+
+function renderPanes() {
+    $('panes').innerHTML = '<div class="pane center"></div>' + bond.tiers.rows.map((row, i) => {
+        const slot = state.slots[i] && byId(state.slots[i]);
+        const open = state.tier > i;
+        const flower = slot ? FLOWER[slot.id] : null;
+        const dormant = slot && state.owing.has(slot.id);
+        return `
+            <button class="pane p${i + 1}${open ? ' unlocked' : ''}${state.tier === i + 1 ? ' current' : ''}${slot && open ? ' filled' : ''}${dormant ? ' dormant' : ''}" data-open="tiers">
+                ${flower ? `<img class="pressed-in" src="assets/flowers/f${flower[0]}.webp" alt="">` : ''}
+                <span class="num">${row.numeral}</span>
+                <span class="name">${slot && open ? escapeHtml(slot.name) : hearts(row.title)}</span>
+            </button>`;
+    }).join('');
+}
+
+function presenceButtons() {
+    const refill = (bond.weapon.stats.find(s => /Refilling/i.test(s.label)) || { children: [] }).children;
+    const names = refill.map(child => child.head).reverse();
+    return names.map((name, i) => `<button class="${(i === 1) === state.presence ? 'on' : ''}" data-near="${i}"${sealed ? ' disabled' : ''}>${escapeHtml(name)}</button>`).join('');
+}
+
+function renderLedger() {
+    const row = tierRow();
+    const used = state.slots.filter(Boolean).length;
+    $('ledger').innerHTML = `
+        <div class="kicker">${escapeHtml(bond.ledger.title)}</div>
+        <h2>Tier ${row.numeral}: ${hearts(row.title)}</h2>
+        <div class="standing">${row.standing ? escapeHtml(row.standing) : hearts(row.title)}</div>
+        <div class="favor">
+            <button class="coin glass" data-act="grant-open" aria-label="Grant"${sealed ? ' disabled' : ''}>${state.favor}</button>
+            <span>${escapeHtml(label(/^Current Favor/i))}</span>
+            <i>${escapeHtml(label(/^Lifetime/i))}: ${state.lifetime}</i>
+        </div>
+        <form class="grant" id="grant"${grantOpen && !sealed ? '' : ' hidden'}>
+            <label><span>${escapeHtml(label(/^Current Favor/i))}</span><input type="number" name="favor" min="0" step="1" inputmode="numeric"></label>
+            <label><span>${escapeHtml(label(/^Current Charges/i))}</span><input type="number" name="charges" min="0" step="1" inputmode="numeric"></label>
+            <button class="price" type="submit">Grant</button>
+        </form>
+        <div class="pair"><span>${escapeHtml(label(/^Upgrade Slots/i))}</span><em>${used} / ${row.slots}</em></div>
+        <div class="pair"><span>${escapeHtml(label(/^Active Passive Upkeep/i))}</span><em>${upkeep()} Favor / Month</em></div>
+        <div class="form"><span>${escapeHtml(label(/^Current Weapon Form/i))}</span>${weaponForm()}</div>
+        <div class="presence">${presenceButtons()}</div>`;
+    $('purse').textContent = state.favor;
+    $('presence-inside').innerHTML = presenceButtons();
+    document.body.classList.toggle('presence-on', state.presence);
+}
+
+function renderLatch() {
+    const latch = $('latch');
+    const tags = [
+        [plain(bond.weapon.title), 'weapon'],
+        [bond.tiers.title, 'tiers'],
+        [plain(bond.slotless.title), 'slotless'],
+        [plain(bond.slotted.title), 'slotted'],
+        [plain(bond.parlor.title), 'parlor'],
+        [bond.rules.title, 'rules']
+    ];
+    latch.innerHTML = '<span class="knob"></span>' + tags.map(([text, key], i) =>
+        `<span class="string" data-i="${i}"></span><button class="tag" data-open="${key}" style="left:${LATCH[i][0]}px;top:${LATCH[i][1]}px;--r:${LATCH[i][2]}deg">${escapeHtml(text)}</button>`).join('');
+    requestAnimationFrame(() => {
+        const kx = 19;
+        const ky = 13;
+        latch.querySelectorAll('.tag').forEach((tag, i) => {
+            const x = LATCH[i][0] + 18;
+            const y = LATCH[i][1] + tag.offsetHeight / 2;
+            const string = latch.querySelector(`.string[data-i="${i}"]`);
+            string.style.left = kx + 'px';
+            string.style.top = ky + 'px';
+            string.style.width = Math.hypot(x - kx, y - ky) + 'px';
+            string.style.transform = `rotate(${Math.atan2(y - ky, x - kx)}rad)`;
+        });
+    });
+}
+
+function renderHome() {
+    renderPanes();
+    renderSillScythe();
+    renderLedger();
+}
+
+function titleCard(title, group, extra = '') {
+    return `
+        <header class="page-title">
+            <h2>${escapeHtml(title)}</h2>
+            ${group ? `<span class="group">${escapeHtml(group)}</span>` : ''}
+            ${extra}
+        </header>`;
+}
+
+function metaParts(item) {
+    const parts = item.meta.split('|').map(p => p.trim()).filter(Boolean);
+    return {
+        shown: parts.filter(p => !/^(Unlock:|Upkeep:|Buyout:)/i.test(p) && !/^(\d+|\?\?\?)\s*Favor$/i.test(p)),
+        price: parts.find(p => /^Unlock:/i.test(p) || /^(\d+|\?\?\?)\s*Favor$/i.test(p)) || '',
+        upkeep: parts.find(p => /^Upkeep:/i.test(p)) || '',
+        buyout: parts.find(p => /^Buyout:/i.test(p)) || ''
+    };
+}
+
+function corners() {
+    return '<span class="corner c1"></span><span class="corner c2"></span><span class="corner c3"></span><span class="corner c4"></span>';
+}
+
+function entryHtml(item, i = 0) {
+    const [f, cut] = FLOWER[item.id] || ['141', 0];
+    const { rot, shift, sx } = jitter(item.id);
+    const locked = item.tier > state.tier;
+    const owned = state.unlocked.has(item.id);
+    const active = state.active.has(item.id);
+    const bought = state.bought.has(item.id);
+    const meta = metaParts(item);
+    const classes = ['entry', i % 2 ? 'alt' : '', locked ? 'sealed' : owned ? 'owned' : 'frosted', active ? 'active' : '', bought ? 'bought' : ''].join(' ');
+    const pinTitle = state.presence ? '' : ` title="${escapeHtml(appointmentNote())}"`;
+    const terms = item.passive ? `
+        <div class="terms">
+            ${meta.upkeep ? `<span class="term${bought ? ' paid' : ''}">${escapeHtml(meta.upkeep)}</span>` : ''}
+            ${meta.buyout ? `<button class="term gold${bought ? ' woven' : ''}" data-act="buyout" data-id="${item.id}"${!owned || bought ? ' disabled' : ''}>${escapeHtml(meta.buyout)}</button>` : ''}
+        </div>` : '';
+    return `
+        <article class="${classes}" data-id="${item.id}" style="--rot:${rot}deg;--shift:${shift}px;--sx:${sx}%">
+            <button class="price" data-act="unlock" data-id="${item.id}"${locked ? ' disabled' : ''}>${escapeHtml(meta.price)}</button>
+            <figure class="specimen ${cut ? 'scrap' : 'clipping'}">${art(f, cut)}${corners()}</figure>
+            <div class="card">
+                ${corners()}
+                <button class="pin" data-act="equip" data-id="${item.id}"${!owned ? ' disabled' : ''}${pinTitle} aria-label="${escapeHtml(boxLabel(item, 'active'))}"></button>
+                <h3>${escapeHtml(item.name)}</h3>
+                <div class="meta">${escapeHtml(meta.shown.join(' | '))}</div>
+                <p>${inline(item.text)}</p>
+                ${terms}
+            </div>
+            <div class="cover"><span class="etch">Tier ${(tierRow(item.tier) || {}).numeral || ''}</span></div>
+        </article>`;
+}
+
+function itemsPage(title, items, extra = '') {
+    const leftCount = items.length > 5 ? 3 : 2;
+    return {
+        left: titleCard(title, '', extra) + `<div class="entries">${items.slice(0, leftCount).map((item, i) => entryHtml(item, i)).join('')}</div>`,
+        right: `<div class="entries">${items.slice(leftCount).map((item, i) => entryHtml(item, i + 1)).join('')}</div>`
+    };
+}
+
+function weaponPage() {
+    const w = bond.weapon;
+    const row = tierRow();
+    const head = bond.tiers.headers;
+    const scaling = [[head[3], row.bonus], [head[5], maxCharges()], [head[6], row.dc], [head[7], row.necrotic]];
+    const stats = w.stats.map(stat => `
+        <div class="row"><b>${escapeHtml(stat.label)}</b>${inline(stat.text)}
+            ${stat.children.length ? `<ul>${stat.children.map(c => `<li><strong>${escapeHtml(c.head)}:</strong> ${inline(c.body)}</li>`).join('')}</ul>` : ''}
+        </div>`).join('');
+    const traitArt = [FLOWER['tainted-vitality'], FLOWER['the-expressive-muse']];
+    const traits = w.traits.map((t, i) => {
+        const [f, cut] = traitArt[i] || ['141', 0];
+        return `
+            <div class="trait${i % 2 ? ' alt' : ''}" style="--rot:${i % 2 ? .6 : -.5}deg">
+                <div class="trait-art ${cut ? 'scrap' : 'clipping'}">${art(f, cut)}</div>
+                <div class="card">
+                    ${corners()}
+                    <h3>${escapeHtml(t.name)}</h3>
+                    <div class="meta">${escapeHtml(t.kind)}</div>
+                    <p>${inline(t.text)}</p>
+                </div>
+            </div>`;
+    }).join('');
+    return {
+        left: titleCard(plain(w.title), aside(w.title)) + `
+            <div class="showcase">
+                <div class="satin">
+                    <div class="specimen-glass">${scytheSvg('', '', formOptions({ mounts: [.3, .74] }))}</div>
+                </div>
+            </div>
+            <div class="plaque">
+                <div class="plaque-head">
+                    <span class="numeral glass">${row.numeral}</span>
+                    <div><h3>${hearts(row.title)}</h3>${row.standing ? `<i>${escapeHtml(row.standing)}</i>` : ''}</div>
+                </div>
+                <div class="big-stats">${scaling.map(([k, v]) => `<div><b>${escapeHtml(String(v))}</b><span>${escapeHtml(k)}</span></div>`).join('')}</div>
+                <div class="line"><span>${escapeHtml(label(/^Current Weapon Form/i))}</span><em>${weaponForm()}</em></div>
+                <div class="line"><span>${escapeHtml(label(/^Current Charges/i))}</span><em>${state.charges} / ${maxCharges()}</em></div>
+            </div>`,
+        right: `
+            <div class="paper-note" style="--rot:.5deg">
+                <span class="sub">${escapeHtml(w.subtitle)}</span>
+                ${w.text.map(t => `<p>${inline(t)}</p>`).join('')}
+            </div>
+            <div class="spec-card">${stats}</div>
+            <h2 class="subhead">${escapeHtml(w.traitsTitle)}</h2>
+            <div class="traits">${traits}</div>`
+    };
+}
+
+function tierCard(row, i) {
+    const n = row.n;
+    const reached = n <= state.tier;
+    const next = n === state.tier + 1;
+    const head = bond.tiers.headers;
+    const features = bond.tiers.features.filter(f => f.tier === n).map(f => f.parts.length
+        ? f.parts.map(p => `<div class="feature"><h4>${escapeHtml(p.name)}</h4><p>${inline(p.text)}</p></div>`).join('')
+        : `<div class="feature"><h4>${escapeHtml(f.name)}</h4><p>${inline(f.text)}</p></div>`).join('');
+    const [f, cut] = TIER_ART[i] || ['141', 0];
+    const values = [row.costText, row.bonus, row.slots, row.charges, row.dc, row.necrotic];
+    const classes = ['tier-card', 'entry', i % 2 ? 'alt' : '', reached ? 'reached owned' : next ? 'frosted' : 'sealed', n === state.tier ? 'current' : ''].join(' ');
+    const title = state.presence ? '' : ` title="${escapeHtml(audienceNote())}"`;
+    return `
+        <article class="${classes}" data-tier="${n}" style="--rot:${(i % 2 ? .5 : -.4)}deg">
+            ${reached ? '' : `<button class="price" data-act="ascend" data-tier="${n}"${next ? '' : ' disabled'}${title}>${escapeHtml(row.costText)}</button>`}
+            <div class="tier-art ${f === 'obsidian-iris' || cut ? 'scrap' : 'clipping'}${f === 'obsidian-iris' ? ' obsidian' : ''}">${art(f, cut)}</div>
+            <div class="card">
+                ${corners()}
+                ${n === state.tier ? '<span class="current-pin"></span>' : ''}
+                <div class="tier-head">
+                    <span class="numeral ${reached ? 'glass' : 'frost'}">${row.numeral}</span>
+                    <div><h3>${hearts(row.title)}</h3>${row.standing ? `<i>${escapeHtml(row.standing)}</i>` : ''}</div>
+                </div>
+                <dl class="tier-stats">${values.map((v, k) => `<dt>${escapeHtml(head[k + 2])}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>
+                ${features}
+            </div>
+            <div class="cover"><span class="etch">Tier ${row.numeral}</span></div>
+        </article>`;
+}
+
+function tiersPage() {
+    const t = bond.tiers;
+    const cards = t.rows.map(tierCard);
+    return {
+        left: titleCard(t.title, '') + `<div class="paper-note" style="--rot:.6deg">${t.text.map(p => `<p>${inline(p)}</p>`).join('')}</div>
+            <div class="tier-list">${cards.slice(0, 3).join('')}</div>`,
+        right: `<div class="tier-list">${cards.slice(3).join('')}</div>`
+    };
+}
+
+function favorHtml(item, i) {
+    const [f, cut, kind] = FLOWER[item.id] || ['141', 0, 'card'];
+    const { rot, shift, sx } = jitter(item.id, .7);
+    const gated = item.req && state.tier < item.req;
+    const count = state.requested[item.id] || 0;
+    const meta = metaParts(item);
+    return `
+        <article class="favor-card entry${i % 2 ? ' alt' : ''} ${gated ? 'sealed' : 'open'}${count ? ' requested' : ''}" data-id="${item.id}" style="--rot:${rot}deg;--shift:${shift}px;--sx:${sx}%">
+            <button class="price" data-act="request" data-id="${item.id}"${gated ? ' disabled' : ''}>${escapeHtml(meta.price)}</button>
+            <figure class="favor-art ${cut ? 'scrap' : 'clipping'}${kind === 'sketch' ? ' charcoal' : ''}">${art(f, cut)}</figure>
+            <div class="eph eph-${kind}">
+                <h3>${escapeHtml(item.name)}</h3>
+                ${meta.shown.length ? `<div class="meta">${escapeHtml(meta.shown.join(' | '))}</div>` : ''}
+                <p>${inline(item.text)}</p>
+            </div>
+            <div class="cover"><span class="etch">Tier ${(tierRow(item.req) || {}).numeral || ''}</span></div>
+            <div class="wax glass">M</div>
+            ${count > 1 ? `<span class="times">&times;${count}</span>` : ''}
+        </article>`;
+}
+
+function parlorPage() {
+    const p = bond.parlor;
+    const items = p.items.map(favorHtml);
+    return {
+        left: titleCard(plain(p.title), aside(p.title)) + `<div class="paper-note" style="--rot:-.5deg">${p.text.map(t => `<p>${inline(t)}</p>`).join('')}</div>
+            <div class="favors">${items.slice(0, 4).join('')}</div>`,
+        right: `<div class="favors">${items.slice(4).join('')}</div>`
+    };
+}
+
+function rulesPage() {
+    const r = bond.rules;
+    const rules = r.items.map((rule, i) => `
+        <div class="rule" style="--rot:${[-.5, .4, -.3][i % 3]}deg">
+            <div class="seal-num glass">${i + 1}</div>
+            <div class="card">
+                ${corners()}
+                <h3>${escapeHtml(rule.name)}</h3>
+                <p>${inline(rule.text)}</p>
+            </div>
+        </div>`).join('');
+    const loadoutRule = r.items.find(x => /Loadout/i.test(x.name));
+    const upkeepRule = r.items.find(x => /Upkeep/i.test(x.name));
+    const count = adjustments();
+    const passives = state.slots.filter(Boolean).map(byId).filter(item => item && item.passive);
+    const rows = passives.map(item => {
+        const meta = metaParts(item);
+        const bought = state.bought.has(item.id);
+        const owing = state.owing.has(item.id);
+        return `<div class="upkeep-row${owing ? ' owing' : ''}">
+            <span class="name">${escapeHtml(item.name)}</span>
+            <span class="term${bought ? ' woven' : ''}">${escapeHtml(bought ? meta.buyout : meta.upkeep)}</span>
+            ${bought ? '<span></span>' : owing ? `<button class="price" data-act="settle" data-id="${item.id}">Settle</button>` : '<span class="ok"></span>'}
+        </div>`;
+    }).join('');
+    return {
+        left: titleCard(r.title, '') + `<div class="rule-list">${rules}</div>`,
+        right: `
+            <div class="panel" style="--rot:.4deg">
+                <h3>${escapeHtml(loadoutRule ? loadoutRule.name : '')}</h3>
+                ${state.presence ? `<div class="tally"><div class="coin glass">${visitCost(count)}</div><span>${count} ${count === 1 ? 'adjustment' : 'adjustments'}</span></div>`
+                    : `<p class="quiet">${escapeHtml(appointmentNote())}</p>`}
+            </div>
+            <div class="panel" style="--rot:-.5deg">
+                <h3>${escapeHtml(upkeepRule ? upkeepRule.name : '')}</h3>
+                ${rows || `<p class="quiet">${escapeHtml(label(/^Active Passive Upkeep/i))}: 0 Favor / Month</p>`}
+                <div class="panel-actions"><button class="price" data-act="month">New month</button></div>
+            </div>`
+    };
+}
+
+function ledgerValue(row) {
+    const tier = tierRow();
+    if (/^Current Scythe Tier/i.test(row.label)) return `Tier ${tier.numeral}: ${hearts(tier.title)}`;
+    if (/^Standing/i.test(row.label)) return tier.standing ? escapeHtml(tier.standing) : hearts(tier.title);
+    if (/^Current Favor/i.test(row.label)) return String(state.favor);
+    if (/^Lifetime/i.test(row.label)) return String(state.lifetime);
+    if (/^Current Charges/i.test(row.label)) return `${state.charges} / ${maxCharges()}`;
+    if (/^Upgrade Slots/i.test(row.label)) return `${state.slots.filter(Boolean).length} / ${tier.slots}`;
+    if (/^Active Passive Upkeep/i.test(row.label)) return `${upkeep()} Favor / Month`;
+    if (/^Current Weapon Form/i.test(row.label)) return weaponForm();
+    if (/^Active Slotted Loadout/i.test(row.label)) {
+        const empty = (bond.ledger.loadout[0] || {}).value || '';
+        const locked = (bond.ledger.loadout[1] || {}).value || '';
+        return `<ul>${bond.ledger.loadout.map((slot, i) => {
+            const item = state.slots[i] && byId(state.slots[i]);
+            const open = state.tier > i;
+            return `<li class="${open ? '' : 'locked'}"><em>${escapeHtml(slot.label)}:</em> ${open ? escapeHtml(item ? item.name : empty) : escapeHtml(locked)}</li>`;
+        }).join('')}</ul>`;
+    }
+    return inline(row.value);
+}
+
+function journalRows() {
+    const last = journal.length - 1;
+    return journal.slice().reverse().map((h, k) => {
+        const when = new Date(h.t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        const favor = h.f ? `<span class="d-favor">${h.f > 0 ? '+' : '&minus;'}${Math.abs(h.f)}</span>` : '';
+        const charges = h.c ? `<span class="d-charge">${h.c > 0 ? '+' : '&minus;'}${Math.abs(h.c)}</span>` : '';
+        const canUndo = k === 0 && !sealed && journal[last] && journal[last].b;
+        return `
+            <li class="${h.off ? 'off' : ''}">
+                <time>${escapeHtml(when)}</time>
+                <span class="what"><span class="kind">${hearts(h.l)}</span>${h.n ? ` ${hearts(h.n)}` : ''}</span>
+                <span class="delta">${favor}${charges}</span>
+                ${canUndo ? '<button class="price undo" data-act="undo">Undo</button>' : ''}
+            </li>`;
+    }).join('');
+}
+
+function ledgerPage() {
+    const rows = bond.ledger.rows.map(row => `<div class="row"><b>${escapeHtml(row.label)}</b>${ledgerValue(row)}</div>`).join('');
+    return {
+        left: titleCard(bond.ledger.title, '') + `
+            <div class="spec-card ledger-card">${rows}</div>
+            <div class="panel keepsake" style="--rot:-.4deg">
+                <h3>Save code</h3>
+                <textarea id="code-out" readonly rows="3" spellcheck="false"></textarea>
+                <div class="panel-actions">
+                    <button class="price" data-act="copy-code">Copy</button>
+                    <button class="price" data-act="copy-link">Link</button>
+                </div>
+                ${sealed ? '' : `
+                <textarea id="code-in" rows="2" spellcheck="false" placeholder="${CODE_PREFIX}"></textarea>
+                <div class="panel-actions"><button class="price" data-act="load-code">Load</button></div>`}
+            </div>`,
+        right: `<ol class="journal">${journalRows()}</ol>`
+    };
+}
+
+function buildPages() {
+    const groups = bond.slotted.groups;
+    const links = current => `<div class="links">${groups.map((g, i) => `<button data-group="${i}" class="${i === current ? 'on' : ''}">${escapeHtml(g.title)}</button>`).join('')}</div>`;
+    pages = [
+        { key: 'weapon', tab: plain(bond.weapon.title), render: weaponPage },
+        { key: 'tiers', tab: bond.tiers.title, render: tiersPage },
+        { key: 'slotless', tab: plain(bond.slotless.title), render: () => itemsPage(plain(bond.slotless.title), bond.slotless.items) },
+        ...groups.map((g, i) => ({ key: 'slotted', tab: plain(bond.slotted.title), render: () => itemsPage(plain(bond.slotted.title), g.items, links(i)) })),
+        { key: 'parlor', tab: plain(bond.parlor.title), render: parlorPage },
+        { key: 'rules', tab: bond.rules.title, render: rulesPage },
+        { key: 'ledger', tab: bond.ledger.title, render: ledgerPage }
+    ];
+    const symbols = {
+        weapon: scytheSvg('', '', { reach: .7 }),
+        tiers: '<span class="sym-arch glass"></span>',
+        slotless: '<img src="assets/flowers/f065.webp" alt="">',
+        slotted: '<img src="assets/flowers/f124.webp" alt="">',
+        parlor: '<span class="sym-seal glass">M</span>',
+        rules: '<span class="sym-ruled"></span>',
+        ledger: '<span class="sym-coin glass"></span>'
+    };
+    const keys = [...new Set(pages.map(p => p.key))];
+    $('notes').innerHTML = keys.map(key =>
+        `<button class="note-tab" data-key="${key}"><span class="sym">${symbols[key]}</span><span>${escapeHtml(pages.find(p => p.key === key).tab)}</span></button>`).join('');
+}
+
+function pageIndex(key) {
+    return Math.max(0, pages.findIndex(p => p.key === key));
+}
+
+function fillCode() {
+    const out = $('code-out');
+    if (!out) return;
+    makeCode().then(code => { out.value = code; }).catch(() => { out.value = ''; });
+}
+
+function renderPage(direction) {
+    const page = pages[shown];
+    const html = page.render();
+    $('left').innerHTML = html.left + `<button class="turn prev" data-turn="-1" aria-label="&larr;"${shown === 0 ? ' hidden' : ''}></button>`;
+    $('right').innerHTML = html.right + `<button class="turn next" data-turn="1" aria-label="&rarr;"${shown === pages.length - 1 ? ' hidden' : ''}></button>`;
+    document.querySelectorAll('.note-tab').forEach(b => b.classList.toggle('on', b.dataset.key === page.key));
+    if (page.key === 'ledger') fillCode();
+    if (direction) {
+        const spread = $('spread');
+        spread.style.setProperty('--from', direction > 0 ? '40px' : '-40px');
+        spread.classList.remove('flipping');
+        void spread.offsetWidth;
+        spread.classList.add('flipping');
+    }
+}
+
+function refreshEntry(id) {
+    const old = document.querySelector(`.entry[data-id="${id}"]:not(.favor-card)`);
+    if (!old) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = entryHtml(byId(id), old.classList.contains('alt') ? 1 : 0).trim();
+    const fresh = tmp.firstChild;
+    old.className = fresh.className;
+    ['.price', '.specimen', '.card'].forEach(sel => old.querySelector(sel).replaceWith(fresh.querySelector(sel)));
+}
+
+function refreshFavor(id) {
+    const old = document.querySelector(`.favor-card[data-id="${id}"]`);
+    if (!old) return;
+    const item = bond.parlor.items.find(i => i.id === id);
+    const tmp = document.createElement('div');
+    tmp.innerHTML = favorHtml(item, old.classList.contains('alt') ? 1 : 0).trim();
+    const fresh = tmp.firstChild;
+    old.className = fresh.className;
+    const times = old.querySelector('.times');
+    if (times) times.remove();
+    const freshTimes = fresh.querySelector('.times');
+    if (freshTimes) old.appendChild(freshTimes);
+    old.querySelector('.price').replaceWith(fresh.querySelector('.price'));
+}
+
+function isInside() {
+    return $('inside').classList.contains('open');
+}
+
+function peer(key) {
+    const home = $('home');
+    const center = document.querySelector('.pane.center').getBoundingClientRect();
+    const box = home.getBoundingClientRect();
+    home.style.transformOrigin = `${center.left - box.left + center.width / 2}px ${center.top - box.top + center.height * .35}px`;
+    shown = pageIndex(key);
+    renderPage();
+    home.classList.add('peering');
+    $('inside').classList.add('open');
+    $('inside').scrollTop = 0;
+    fitScene();
+    setTimeout(() => home.classList.add('away'), 1250);
+}
+
+function stepBack() {
+    const home = $('home');
+    renderHome();
+    home.classList.remove('away');
+    $('inside').classList.remove('open');
+    requestAnimationFrame(() => requestAnimationFrame(() => home.classList.remove('peering')));
+}
+
+function refuse(el) {
+    if (!el || !el.classList) return;
+    el.classList.remove('shake');
+    void el.offsetWidth;
+    el.classList.add('shake');
+}
+
+function rerender() {
+    if (isInside()) {
+        const scroll = $('inside').scrollTop;
+        renderPage();
+        $('inside').scrollTop = scroll;
+    }
+    renderHome();
+}
+
+function setPresence(near) {
+    if (sealed || near === state.presence) return;
+    if (near) {
+        state.visit = loadoutKey();
+        state.presence = true;
+        save();
+        return;
+    }
+    const before = plainState();
+    const cost = visitCost();
+    state.favor -= cost;
+    state.visit = null;
+    state.presence = false;
+    clampCharges();
+    if (cost) {
+        const rule = bond.rules.items.find(x => /Loadout/i.test(x.name));
+        commit(rule ? rule.name : '', '', before);
+    } else {
+        save();
+    }
+}
+
+function act(button) {
+    const kind = button.dataset.act;
+    if (kind === 'copy-code' || kind === 'copy-link') return copyCode(button, kind === 'copy-link');
+    if (kind === 'grant-open') {
+        grantOpen = !grantOpen;
+        renderLedger();
+        if (grantOpen) $('grant').querySelector('input').focus();
+        return;
+    }
+    if (sealed) return refuse(button);
+    const id = button.dataset.id;
+    const item = id ? byId(id) : null;
+    const before = plainState();
+
+    if (kind === 'unlock') {
+        if (state.unlocked.has(id)) return;
+        const cost = typeof item.cost === 'number' ? item.cost : 0;
+        if (state.favor < cost) return refuse(button);
+        state.favor -= cost;
+        state.unlocked.add(id);
+        commit(boxLabel(item, 'unlocked'), item.name, before);
+        refreshEntry(id);
+        return renderHome();
+    }
+
+    if (kind === 'equip') {
+        if (!state.presence) return refuse(button);
+        const wasActive = state.active.has(id);
+        if (wasActive) {
+            state.active.delete(id);
+            state.owing.delete(id);
+            state.slots = state.slots.map(s => s === id ? null : s);
+        } else if (!isSlotless(item)) {
+            const free = state.slots.findIndex((s, i) => !s && i < state.tier);
+            if (free === -1) return refuse(button);
+            state.slots[free] = id;
+            state.active.add(id);
+            if (item.passive && !state.bought.has(id)) state.owing.add(id);
+        } else {
+            if (id.startsWith('crystalline-edge')) {
+                [...state.active].filter(a => a.startsWith('crystalline-edge') && a !== id).forEach(a => state.active.delete(a));
+            }
+            state.active.add(id);
+        }
+        if (visitCost() > state.favor) {
+            state = readState(before);
+            return refuse(button);
+        }
+        clampCharges();
+        commit(boxLabel(item, 'active'), item.name, before, wasActive);
+        if (isSlotless(item)) bond.slotless.items.filter(x => x.id.startsWith('crystalline-edge')).forEach(x => refreshEntry(x.id));
+        refreshEntry(id);
+        return renderHome();
+    }
+
+    if (kind === 'buyout') {
+        if (state.bought.has(id)) return;
+        if (state.favor < (item.buyout || 0)) return refuse(button);
+        state.favor -= item.buyout;
+        state.bought.add(id);
+        state.owing.delete(id);
+        clampCharges();
+        commit(boxLabel(item, 'bought'), item.name, before);
+        refreshEntry(id);
+        return renderHome();
+    }
+
+    if (kind === 'ascend') {
+        const n = Number(button.dataset.tier);
+        const row = tierRow(n);
+        if (!state.presence || n !== state.tier + 1 || state.favor < row.cost) return refuse(button);
+        state.favor -= row.cost;
+        state.tier = n;
+        commit(`Tier ${row.numeral}`, row.title, before);
+        stepBack();
+        setTimeout(() => showTier(), 1500);
+        return;
+    }
+
+    if (kind === 'request') {
+        if (item.cost === '???') return askAmount(button, item);
+        if (state.favor < item.cost) return refuse(button);
+        state.favor -= item.cost;
+        state.requested[id] = (state.requested[id] || 0) + 1;
+        commit(plain(bond.parlor.title), item.name, before);
+        refreshFavor(id);
+        return renderHome();
+    }
+
+    if (kind === 'settle') {
+        if (state.favor < (item.upkeep || 0)) return refuse(button);
+        state.favor -= item.upkeep;
+        state.owing.delete(id);
+        clampCharges();
+        commit(metaParts(item).upkeep, item.name, before);
+        return rerender();
+    }
+
+    if (kind === 'month') {
+        const due = passivesInUse();
+        if (!due.length) return refuse(button);
+        due.forEach(p => state.owing.add(p.id));
+        clampCharges();
+        commit('New month', '', before);
+        return rerender();
+    }
+
+    if (kind === 'spend') {
+        if (state.charges < 1) return refuse(button);
+        state.charges -= 1;
+        commit(label(/^Current Charges/i), '', before);
+        return rerender();
+    }
+
+    if (kind === 'refill') {
+        const max = maxCharges();
+        if (state.charges >= max || state.favor < 1) return refuse(button);
+        state.favor -= 1;
+        state.charges = Math.min(max, state.charges + refillRate());
+        const choice = refillChoice();
+        commit(choice.head, choice.body, before);
+        return rerender();
+    }
+
+    if (kind === 'undo') {
+        if (!undo()) return refuse(button);
+        showTier();
+        return rerender();
+    }
+
+    if (kind === 'load-code') {
+        const field = $('code-in');
+        readCode(field.value).then(loaded => {
+            state = loaded.state;
+            commit('Save code', '', before);
+            showTier();
+            rerender();
+        }).catch(() => refuse(button));
+    }
+}
+
+function askAmount(button, item) {
+    if (button.querySelector('input')) return;
+    button.innerHTML = `<input type="number" min="0" placeholder="???" aria-label="${escapeHtml(item.meta)}">`;
+    const input = button.querySelector('input');
+    input.focus();
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Escape') return refreshFavor(item.id);
+        if (e.key !== 'Enter') return;
+        const amount = Number(input.value);
+        if (!input.value || amount < 0 || amount > state.favor) return refuse(button);
+        const before = plainState();
+        state.favor -= amount;
+        state.requested[item.id] = (state.requested[item.id] || 0) + 1;
+        commit(plain(bond.parlor.title), item.name, before);
+        refreshFavor(item.id);
+        renderHome();
+    });
+}
+
+function grantFrom(form) {
+    if (sealed) return;
+    const favor = Math.max(0, Math.floor(Number(form.favor.value) || 0));
+    const charges = Math.max(0, Math.floor(Number(form.charges.value) || 0));
+    if (!favor && !charges) return refuse(form.querySelector('.price'));
+    const before = plainState();
+    state.favor += favor;
+    state.lifetime += favor;
+    state.charges = Math.min(maxCharges(), state.charges + charges);
+    commit('Grant', '', before);
+    grantOpen = false;
+    rerender();
+}
+
+function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    const area = document.createElement('textarea');
+    area.value = text;
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+    return Promise.resolve();
+}
+
+function copyCode(button, asLink) {
+    makeCode().then(code => {
+        const text = asLink ? `${location.origin}${location.pathname}#seal=${code}` : code;
+        return copyText(text);
+    }).then(() => {
+        button.classList.remove('copied');
+        void button.offsetWidth;
+        button.classList.add('copied');
+    }).catch(() => refuse(button));
+}
+
+function fitScene() {
+    const width = document.documentElement.clientWidth || window.innerWidth;
+    const inner = $('inside').clientWidth || width;
+    const scene = Math.max(.55, Math.min(width / 1440, window.innerHeight / 900));
+    const book = Math.min(1.3, Math.max(.7, inner / 1440));
+    $('scene').style.zoom = scene;
+    document.querySelector('.book-wrap').style.zoom = book;
+}
+
+const music = $('music');
+const MUSIC_VOLUME = .32;
+let musicFade = null;
+let musicWanted = true;
+
+function fadeMusic(target, ms, done) {
+    clearInterval(musicFade);
+    const from = music.volume;
+    const start = performance.now();
+    musicFade = setInterval(() => {
+        const k = Math.min(1, (performance.now() - start) / ms);
+        music.volume = from + (target - from) * k * k * (3 - 2 * k);
+        if (k < 1) return;
+        clearInterval(musicFade);
+        if (done) done();
+    }, 40);
+}
+
+function firstGesture(e) {
+    if (e.target.closest && e.target.closest('#music-toggle')) return;
+    startMusic();
+}
+
+function startMusic() {
+    if (!musicWanted || !music.paused) return;
+    music.volume = 0;
+    music.play().then(() => {
+        fadeMusic(MUSIC_VOLUME, 6000);
+        document.removeEventListener('pointerdown', firstGesture, true);
+        document.removeEventListener('keydown', firstGesture, true);
+    }).catch(() => {});
+}
+
+function setMusic(on) {
+    musicWanted = on;
+    $('music-toggle').classList.toggle('off', !on);
+    $('music-toggle').setAttribute('aria-pressed', on ? 'true' : 'false');
+    try {
+        localStorage.setItem('morvelle-music', on ? 'on' : 'off');
+    } catch (error) {
+        musicWanted = on;
+    }
+    if (on) startMusic();
+    else fadeMusic(0, 1200, () => music.pause());
+}
+
+function setFrost(on) {
+    document.body.classList.toggle('no-frost', !on);
+    $('frost').setAttribute('aria-pressed', on ? 'true' : 'false');
+    try {
+        localStorage.setItem('morvelle-frost', on ? 'on' : 'off');
+    } catch (error) {
+        return;
+    }
+}
+
+function readPreferences() {
+    try {
+        musicWanted = localStorage.getItem('morvelle-music') !== 'off';
+        if (localStorage.getItem('morvelle-frost') === 'off') setFrost(false);
+    } catch (error) {
+        musicWanted = true;
+    }
+    $('music-toggle').classList.toggle('off', !musicWanted);
+}
+
+document.addEventListener('click', e => {
+    const opener = e.target.closest('[data-open]');
+    if (opener) return peer(opener.dataset.open);
+    const tab = e.target.closest('.note-tab');
+    if (tab) {
+        const next = pageIndex(tab.dataset.key);
+        const dir = Math.sign(next - shown);
+        shown = next;
+        $('inside').scrollTop = 0;
+        return renderPage(dir);
+    }
+    const group = e.target.closest('[data-group]');
+    if (group) {
+        const next = pageIndex('slotted') + Number(group.dataset.group);
+        const dir = Math.sign(next - shown);
+        shown = next;
+        return renderPage(dir);
+    }
+    const turn = e.target.closest('[data-turn]');
+    if (turn) {
+        shown += Number(turn.dataset.turn);
+        $('inside').scrollTop = 0;
+        return renderPage(Number(turn.dataset.turn));
+    }
+    const action = e.target.closest('[data-act]');
+    if (action) {
+        if (action.disabled || (action.getAttribute && action.getAttribute('disabled') !== null)) return;
+        return act(action);
+    }
+    const near = e.target.closest('.presence button');
+    if (near) {
+        setPresence(near.dataset.near === '1');
+        return rerender();
+    }
+});
+
+document.addEventListener('submit', e => {
+    if (e.target.id !== 'grant') return;
+    e.preventDefault();
+    grantFrom(e.target);
+});
+
+document.addEventListener('keydown', e => {
+    if (!isInside() || (e.target.closest && e.target.closest('input, textarea'))) return;
+    if (e.key === 'Escape') return stepBack();
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
+    if (step && pages[shown + step]) {
+        shown += step;
+        $('inside').scrollTop = 0;
+        renderPage(step);
+    }
+});
+
+$('back').addEventListener('click', stepBack);
+$('frost').addEventListener('click', () => setFrost(document.body.classList.contains('no-frost')));
+$('music-toggle').addEventListener('click', () => setMusic(!musicWanted));
+window.addEventListener('resize', fitScene);
+window.addEventListener('storage', e => {
+    if (e.key !== SAVE_KEY || sealed) return;
+    loadSaved();
+    showTier();
+    rerender();
+});
+
+function openSeal(code) {
+    return readCode(code).then(loaded => {
+        sealed = true;
+        sealedAt = loaded.at;
+        state = loaded.state;
+        journal = loaded.journal;
+        document.body.classList.add('sealed');
+        $('sealed-mark').hidden = false;
+        $('sealed-date').textContent = new Date(sealedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+    }).catch(() => loadSaved());
+}
+
+readPreferences();
+fitScene();
+document.addEventListener('pointerdown', firstGesture, true);
+document.addEventListener('keydown', firstGesture, true);
+startMusic();
+
+Promise.all([loadBond(), loadScythe()]).then(([data]) => {
+    bond = data;
+    const seal = location.hash.match(/^#seal=(.+)$/);
+    const ready = seal ? openSeal(seal[1]) : Promise.resolve(loadSaved());
+    return ready;
+}).then(() => {
+    $('title').textContent = bond.title;
+    $('subtitle').textContent = bond.subtitle;
+    renderVeil();
+    renderCrest();
+    buildPages();
+    renderLatch();
+    renderHome();
+    showTier(true);
+    document.body.classList.add('ready');
+}).catch(() => {
+    document.body.classList.add('failed');
+});

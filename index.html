@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Morvelle's Votive Glass</title>
+    <meta name="description" content="A slender scythe of translucent crimson glass, bled and shaped by the hand of Lady Ovidia Morvelle.">
+    <meta name="theme-color" content="#9e1230">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Morvelle's Votive Glass">
+    <meta property="og:description" content="A slender scythe of translucent crimson glass, bled and shaped by the hand of Lady Ovidia Morvelle.">
+    <meta property="og:url" content="https://riverdoge.github.io/NelvoraLadyMorvellesFavor/">
+    <meta property="og:image" content="https://riverdoge.github.io/NelvoraLadyMorvellesFavor/assets/share.jpg">
+    <link rel="icon" type="image/png" href="assets/favicon.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Cormorant+SC:wght@500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Pinyon+Script&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="book.css">
+</head>
+<body>
+
+    <div class="home" id="home">
+        <div class="scene" id="scene">
+            <div class="sealed-mark" id="sealed-mark" hidden>
+                <span class="glass">M</span>
+                <time id="sealed-date"></time>
+            </div>
+
+            <header class="heading">
+                <span class="script" id="title"></span>
+                <span class="sc" id="subtitle"></span>
+            </header>
+
+            <div class="room">
+                <aside class="card-ledger" id="ledger"></aside>
+
+                <div class="window-wrap">
+                    <div class="crest" id="crest"></div>
+                    <div class="window">
+                        <div class="glass-area">
+                            <div class="garden">
+                                <img src="assets/flowers/f079.webp" alt="" style="left: 12%; top: 18%; width: 46%; --b: 3px; --r: -12deg">
+                                <img src="assets/flowers/f065.webp" alt="" style="left: 88%; top: 16%; width: 44%; --b: 3px; --r: 14deg">
+                                <img src="assets/flowers/f087.webp" alt="" style="left: 50%; top: 10%; width: 40%; --b: 5px; --o: .8">
+                                <img src="assets/flowers/f143.webp" alt="" style="left: 10%; top: 52%; width: 40%; --b: 2px; --r: 8deg">
+                                <img src="assets/flowers/f137.webp" alt="" style="left: 90%; top: 48%; width: 42%; --b: 2px; --r: -6deg">
+                                <img src="assets/flowers/f017.webp" alt="" style="left: 12%; top: 86%; width: 44%; --b: 1px; --r: 10deg">
+                                <img src="assets/flowers/f107.webp" alt="" style="left: 88%; top: 84%; width: 46%; --b: 1px; --r: -10deg">
+                            </div>
+                            <div class="grid">
+                                <div class="seat">
+                                    <div class="veil" id="veil">
+                                        <div class="veil-frame">
+                                            <img class="veil-portrait" src="assets/art/ovidia.webp" alt="Lady Ovidia Morvelle" style="--veil-pos: 64% 26%">
+                                            <div class="veil-mist"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="grid panes" id="panes"></div>
+                        </div>
+                        <div class="vines">
+                            <img src="assets/flowers/f126.webp" alt="" style="left: -128px; bottom: -6px; --w: 170px; --r: 6deg">
+                            <img src="assets/flowers/f123.webp" alt="" style="left: -96px; top: 8%; --w: 140px; --r: 22deg; --o: 100% 100%">
+                            <img src="assets/flowers/f116.webp" alt="" style="right: -134px; bottom: -8px; --w: 178px; --r: -6deg; --flip: -1">
+                            <img src="assets/flowers/f118.webp" alt="" style="right: -92px; top: 6%; --w: 136px; --r: -22deg; --o: 0 100%">
+                            <img src="assets/flowers/f040.webp" alt="" style="left: 10px; bottom: -46px; --w: 92px; --r: -80deg">
+                            <img src="assets/flowers/f098.webp" alt="" style="right: 8px; bottom: -44px; --w: 92px; --r: 80deg; --flip: -1">
+                        </div>
+                    </div>
+                    <div class="sill">
+                        <div class="sill-scythe" id="sill-scythe"></div>
+                    </div>
+                </div>
+
+                <div class="latch" id="latch"></div>
+            </div>
+
+            <footer class="credits">
+                Flowers from Pierre-Joseph Redouté, <i>Choix des plus belles fleurs</i> (1827), via the Biodiversity Heritage Library
+                &middot; Portrait by cjjcha
+                &middot; Scythe from a coat of arms illustration, Wikimedia Commons
+                &middot; &ldquo;In Love&rdquo; from <i>Tomodachi Life</i>, by Asuka Ito and Daisuke Matsuoka
+            </footer>
+        </div>
+    </div>
+
+    <audio id="music" src="assets/audio/in-love.mp3" loop preload="auto"></audio>
+    <button class="music-toggle glass" id="music-toggle" aria-label="Music" aria-pressed="true">&#9834;</button>
+
+    <div class="inside" id="inside">
+        <div class="inside-bar">
+            <button class="back glass" id="back" aria-label="Back"></button>
+            <div class="purse glass" id="purse"></div>
+            <button class="frost-toggle" id="frost" aria-label="Frosted glass" title="Frosted glass" aria-pressed="true"></button>
+            <div class="presence" id="presence-inside"></div>
+        </div>
+        <div class="book-wrap">
+            <div class="book">
+                <nav class="notes" id="notes"></nav>
+                <div class="block" id="spread">
+                    <section class="page left" id="left"></section>
+                    <section class="page right" id="right"></section>
+                    <div class="crease"></div>
+                    <div class="tie" style="top: 14%"><span></span></div>
+                    <div class="tie" style="top: 50%"><span></span></div>
+                    <div class="tie" style="top: 86%"><span></span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="bond.js"></script>
+    <script src="glass.js"></script>
+    <script src="ledger.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
