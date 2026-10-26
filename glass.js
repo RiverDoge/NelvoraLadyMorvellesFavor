@@ -116,7 +116,7 @@ function scytheSvg(extra = '', attrs = '', options = {}) {
     return ownIds(`<svg viewBox="${SCYTHE_VIEW}" ${attrs}>${SCYTHE_DEFS}${options.mirror ? `<g transform="translate(332 0) scale(-1 1)">${body}</g>` : body}</svg>`);
 }
 
-function fitSvg(svg, pad = 8) {
+function fitSvg(svg, pad = 8, centerRod = false) {
     const toSvg = svg.getScreenCTM().inverse();
     const points = [];
     const add = (el, x, y) => points.push(new DOMPoint(x, y).matrixTransform(el.getScreenCTM()).matrixTransform(toSvg));
@@ -136,6 +136,18 @@ function fitSvg(svg, pad = 8) {
         }
     });
     const xs = points.map(p => p.x), ys = points.map(p => p.y);
-    const x1 = Math.min(...xs) - pad, y1 = Math.min(...ys) - pad;
-    svg.setAttribute('viewBox', `${x1} ${y1} ${Math.max(...xs) - x1 + pad} ${Math.max(...ys) - y1 + pad}`);
+    let x1 = Math.min(...xs) - pad;
+    let x2 = Math.max(...xs) + pad;
+    const y1 = Math.min(...ys) - pad;
+    const y2 = Math.max(...ys) + pad;
+    if (centerRod) {
+        const rod = svg.querySelector('line');
+        const a = new DOMPoint(+rod.getAttribute('x1'), +rod.getAttribute('y1')).matrixTransform(rod.getScreenCTM()).matrixTransform(toSvg);
+        const b = new DOMPoint(+rod.getAttribute('x2'), +rod.getAttribute('y2')).matrixTransform(rod.getScreenCTM()).matrixTransform(toSvg);
+        const mid = (a.x + b.x) / 2;
+        const half = Math.max(mid - x1, x2 - mid);
+        x1 = mid - half;
+        x2 = mid + half;
+    }
+    svg.setAttribute('viewBox', `${x1} ${y1} ${x2 - x1} ${y2 - y1}`);
 }

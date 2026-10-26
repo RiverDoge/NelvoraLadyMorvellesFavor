@@ -143,7 +143,7 @@ function renderSillScythe() {
     clampCharges();
     const span = formOptions().reach;
     const beads = Array.from({ length: max }, (_, i) => {
-        const [x, y] = rodPoint(span * (.14 + (max > 1 ? i * (.78 / (max - 1)) : 0)));
+        const [x, y] = rodPoint(span * (max > 1 ? .12 + i * (.76 / (max - 1)) : .5));
         const full = i < state.charges;
         return `<circle class="bead-svg" data-act="${full ? 'spend' : 'refill'}" cx="${x}" cy="${y}" r="12.5" fill="url(#bead-${full ? 'glass' : 'empty'})" stroke="${full ? '#4b0412' : '#9e1230'}" stroke-opacity="${full ? '.4' : '.55'}" stroke-width="${full ? 1 : 1.4}"${full ? ' filter="url(#bead-glow)"' : ''}/>`;
     }).join('');
@@ -153,7 +153,7 @@ function renderSillScythe() {
         <div class="charge-count">${escapeHtml(label(/^Current Charges/i))}<b>${state.charges} / ${max}</b>
             <button class="price refill" data-act="refill" title="${escapeHtml(choice.head)}"${state.charges >= max || state.favor < 1 || sealed ? ' disabled' : ''}>${rich(choice.body)}</button>
         </div>`;
-    fitSvg(host.querySelector('svg'), 14);
+    fitSvg(host.querySelector('svg'), 14, true);
 }
 
 function renderPanes() {
@@ -604,31 +604,44 @@ function showSpread() {
 function turnTo(target) {
     if (turning || target === current || !spreads[target]) return;
     const forward = target > current;
-    const from = spreads[current];
     const to = spreads[target];
-    const block = $('spread');
+    const lifted = forward ? $('right') : $('left');
+    const landing = forward ? $('left') : $('right');
+    const front = document.createElement('section');
+    front.className = `page ${forward ? 'right' : 'left'}`;
+    front.append(...lifted.childNodes);
+    const back = document.createElement('section');
+    back.className = `page ${forward ? 'left' : 'right'}`;
+    back.innerHTML = pageInner(forward ? to.left : to.right, forward ? 'left' : 'right', target);
+    lifted.innerHTML = pageInner(forward ? to.right : to.left, forward ? 'right' : 'left', target);
     const leaf = document.createElement('div');
     leaf.className = `leaf ${forward ? 'next' : 'prev'}`;
-    leaf.innerHTML = `
-        <div class="face front"><section class="page ${forward ? 'right' : 'left'}">${pageInner(forward ? from.right : from.left, forward ? 'right' : 'left', current)}</section></div>
-        <div class="face back"><section class="page ${forward ? 'left' : 'right'}">${pageInner(forward ? to.left : to.right, forward ? 'left' : 'right', target)}</section></div>`;
+    const faceFront = document.createElement('div');
+    faceFront.className = 'face recto';
+    faceFront.appendChild(front);
+    const faceBack = document.createElement('div');
+    faceBack.className = 'face verso';
+    faceBack.appendChild(back);
+    leaf.append(faceFront, faceBack);
     turning = true;
-    const old = current;
     current = target;
-    if (forward) $('right').innerHTML = pageInner(to.right, 'right', target);
-    else $('left').innerHTML = pageInner(to.left, 'left', target);
-    block.appendChild(leaf);
+    $('spread').appendChild(leaf);
     document.querySelectorAll('.note-tab').forEach(b => b.classList.toggle('on', b.dataset.key === to.key));
-    requestAnimationFrame(() => requestAnimationFrame(() => leaf.classList.add('turning')));
+    const images = [...back.querySelectorAll('img'), ...lifted.querySelectorAll('img')];
+    const decoded = Promise.all(images.map(img => img.decode ? img.decode().catch(() => {}) : null));
+    Promise.race([decoded, new Promise(resolve => setTimeout(resolve, 250))])
+        .then(() => requestAnimationFrame(() => leaf.classList.add('turning')));
+    let finished = false;
     const done = () => {
-        if (!leaf.isConnected) return;
-        showSpread();
+        if (finished) return;
+        finished = true;
+        landing.replaceChildren(...back.childNodes);
         leaf.remove();
         turning = false;
+        if ($('code-out')) fillCode();
     };
     leaf.addEventListener('transitionend', e => { if (e.target === leaf) done(); });
-    setTimeout(done, 1400);
-    if (old === current) done();
+    setTimeout(done, 1800);
 }
 
 function sectionStart(key, group) {
@@ -924,7 +937,7 @@ function copyCode(button, asLink) {
 function fitScene() {
     const width = document.documentElement.clientWidth || window.innerWidth;
     const height = window.innerHeight;
-    $('scene').style.zoom = Math.max(.55, Math.min(width / 1440, height / 900));
+    $('scene').style.zoom = Math.max(.55, Math.min(width / 1440, height / 985));
     document.querySelector('.book-wrap').style.zoom = Math.max(.55, Math.min(width / 1440, height / BOOK_HEIGHT));
 }
 

@@ -317,7 +317,7 @@ body { overflow-x: hidden; }
     background: linear-gradient(180deg, #fbf6ee, var(--wood) 40%, var(--wood-shade));
     box-shadow: 0 18px 24px -16px rgba(80, 50, 30, .5), inset 0 -2px 0 rgba(160, 130, 100, .3);
 }
-.sill-scythe { position: absolute; left: 50%; top: -17px; width: 380px; transform: translateX(-50%); z-index: 6; }
+.sill-scythe { position: absolute; left: 50%; top: -17px; width: 420px; transform: translateX(-50%); z-index: 6; }
 .sill-scythe svg { width: 100%; overflow: visible; filter: drop-shadow(0 5px 6px rgba(110, 10, 30, .3)); }
 .sill-scythe circle.bead-svg { cursor: pointer; transition: opacity .3s; }
 .sill-scythe circle.bead-svg:hover { opacity: .8; }
@@ -413,7 +413,7 @@ body { overflow-x: hidden; }
 body { opacity: 0; transition: opacity 1.4s ease; }
 body.ready, body.failed { opacity: 1; }
 
-.scene { position: relative; width: 1440px; height: 900px; margin: 0 auto; }
+.scene { position: relative; width: 1440px; height: 985px; margin: 0 auto; }
 
 .veil.instant .bloom, .veil.instant .veil-portrait, .veil.instant .veil-mist { transition: none !important; }
 
