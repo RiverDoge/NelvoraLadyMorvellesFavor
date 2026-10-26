@@ -1,6 +1,7 @@
 const SCYTHE_VIEW = '56 64 220 372';
 const ROD = { x1: 244, y1: 121, x2: 158, y2: 424 };
 const ROD_ANGLE = Math.atan2(ROD.y2 - ROD.y1, ROD.x2 - ROD.x1) * 180 / Math.PI;
+const BLADE_CLIP = [[40, 40], [300, 40], [300, 126], [236, 130], [40, 268]];
 
 const BLADES = {
     crimson: ['#ff9fb0', '#d93556', '#9a0f2c', '#4a0410'],
@@ -49,7 +50,7 @@ const SCYTHE_DEFS = `
         <stop offset=".6" stop-color="#fbeeee" stop-opacity=".55"/>
         <stop offset="1" stop-color="#d9b5b8" stop-opacity=".8"/>
     </radialGradient>
-    <clipPath id="blade-clip"><polygon points="40,40 300,40 300,126 236,130 40,268"/></clipPath>
+    <clipPath id="blade-clip"><polygon points="${BLADE_CLIP.join(' ')}"/></clipPath>
     <filter id="soft"><feGaussianBlur stdDeviation="1.3"/></filter>
     <filter id="thick" x="-10%" y="-10%" width="120%" height="120%">
         <feGaussianBlur in="SourceAlpha" stdDeviation="3" result="b"/>
@@ -67,13 +68,57 @@ const SCYTHE_DEFS = `
 
 let bladePath = '';
 let bladeEdge = '';
+let bladePoints = [];
 let glassCount = 0;
 
 function loadScythe() {
     return fetch('assets/scythe.svg').then(r => r.text()).then(text => {
         bladePath = (text.match(/<path class="body" d="([^"]+)"/) || [])[1] || '';
         bladeEdge = (text.match(/<path class="edge" d="([^"]+)"/) || [])[1] || '';
+        bladePoints = samplePath(bladePath).filter(insideClip);
     });
+}
+
+function samplePath(d) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', d);
+    svg.style.cssText = 'position: absolute; width: 0; height: 0; visibility: hidden';
+    svg.appendChild(path);
+    document.body.appendChild(svg);
+    const length = path.getTotalLength();
+    const points = Array.from({ length: 161 }, (_, i) => {
+        const p = path.getPointAtLength(length * i / 160);
+        return [p.x, p.y];
+    });
+    svg.remove();
+    return points;
+}
+
+function insideClip([x, y]) {
+    let inside = false;
+    for (let i = 0, j = BLADE_CLIP.length - 1; i < BLADE_CLIP.length; j = i++) {
+        const [xi, yi] = BLADE_CLIP[i], [xj, yj] = BLADE_CLIP[j];
+        if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+}
+
+function scytheView(options, turn, pad) {
+    const [ex, ey] = rodPoint(options.reach || 1);
+    const a = ROD_ANGLE * Math.PI / 180;
+    const points = [...bladePoints];
+    [[ROD.x1, ROD.y1], [ex, ey]].forEach(([x, y]) => [[-6, -6], [6, -6], [-6, 6], [6, 6]].forEach(([dx, dy]) => points.push([x + dx, y + dy])));
+    (options.mounts || []).forEach(t => {
+        const [x, y] = rodPoint(t);
+        points.push([x - Math.sin(a) * 17, y + Math.cos(a) * 17], [x + Math.sin(a) * 17, y - Math.cos(a) * 17]);
+    });
+    const r = turn * Math.PI / 180;
+    const turned = points.map(([x, y]) => [x * Math.cos(r) - y * Math.sin(r), x * Math.sin(r) + y * Math.cos(r)]);
+    const xs = turned.map(p => p[0]), ys = turned.map(p => p[1]);
+    const x1 = Math.min(...xs) - pad, y1 = Math.min(...ys) - pad;
+    return { x: x1, y: y1, width: Math.max(...xs) + pad - x1, height: Math.max(...ys) + pad - y1 };
 }
 
 function rodPoint(t) {
@@ -113,7 +158,8 @@ function ownIds(markup) {
 
 function scytheSvg(extra = '', attrs = '', options = {}) {
     const body = scytheBody(extra, options);
-    return ownIds(`<svg viewBox="${SCYTHE_VIEW}" ${attrs}>${SCYTHE_DEFS}${options.mirror ? `<g transform="translate(332 0) scale(-1 1)">${body}</g>` : body}</svg>`);
+    const placed = options.mirror ? `<g transform="translate(332 0) scale(-1 1)">${body}</g>` : options.turn ? `<g transform="rotate(${options.turn})">${body}</g>` : body;
+    return ownIds(`<svg viewBox="${options.view || SCYTHE_VIEW}" ${attrs}>${SCYTHE_DEFS}${placed}</svg>`);
 }
 
 function fitSvg(svg, pad = 8, centerRod = false) {

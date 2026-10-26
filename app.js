@@ -13,6 +13,8 @@ const FLOWER = {
 
 const TIER_ART = [['009', 1], ['029', 1], ['001', 0], ['039', 0], ['129', 1], ['124', 1], ['obsidian-iris', 1]];
 
+const SPECIMEN_SCALE = .72;
+
 const VEIL = [
     ['129', 10, 4, 62, 160, 3], ['050', 48, 2, 58, 172, 5], ['053', 8, 18, 60, -12, 2], ['118', 6, 32, 58, -24, 4],
     ['087', 18, 46, 64, 8, 5], ['143', 40, 58, 70, -6, 2], ['107', 86, 62, 66, 12, 3], ['040', 12, 60, 60, 20, 4],
@@ -75,6 +77,15 @@ function rich(text) {
 
 function plain(title) {
     return title.replace(/\s*\([^)]*\)\s*$/, '');
+}
+
+function specimenHtml() {
+    const options = formOptions({ turn: -10 });
+    options.mounts = [.3 * options.reach, .74 * options.reach];
+    const box = scytheView(options, options.turn, 4);
+    const view = [box.x, box.y, box.width, box.height].map(n => n.toFixed(1)).join(' ');
+    const width = box.width * SPECIMEN_SCALE * options.size;
+    return `<div class="specimen-glass" style="width: ${width.toFixed(1)}px">${scytheSvg('', '', Object.assign(options, { view }))}</div>`;
 }
 
 function shortTitle(title) {
@@ -350,7 +361,7 @@ function weaponBlocks() {
     });
     return [
         titleCard(bond.title, `Tier ${row.numeral}: ${hearts(row.title)}`),
-        `<div class="showcase"><div class="satin"><div class="specimen-glass">${scytheSvg('', '', formOptions({ mounts: [.3, .74] }))}</div></div></div>`,
+        `<div class="showcase"><div class="satin">${specimenHtml()}</div></div>`,
         `<div class="plaque">
             <div class="big-stats">${scaling.map(([k, v]) => `<div><b>${escapeHtml(String(v))}</b><span>${escapeHtml(k)}</span></div>`).join('')}</div>
             <div class="roll-wrap" id="roll">${rollHtml()}</div>

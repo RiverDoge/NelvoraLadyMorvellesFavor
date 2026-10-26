@@ -188,7 +188,8 @@ function formOptions(extra = {}) {
     const on = id => state.active.has(id);
     const reach = on('crescent-sickle-conversion') ? .52 : on('adaptive-scale') ? 1.22 : 1;
     const blade = on('crystalline-edge-pure-vitae') ? 'vitae' : on('crystalline-edge-tuning-glass') ? 'tuning' : 'crimson';
-    return Object.assign({ reach, blade }, extra);
+    const size = on('adaptive-scale') ? 1 : .6;
+    return Object.assign({ reach, blade, size }, extra);
 }
 
 function loadoutKey() {
