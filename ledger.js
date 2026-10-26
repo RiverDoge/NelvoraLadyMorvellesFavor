@@ -22,7 +22,9 @@ function freshState() {
         slots: bond.tiers.rows.map(() => null),
         presence: false,
         visit: null,
-        requested: {}
+        requested: {},
+        mod: null,
+        prof: null
     };
 }
 
@@ -39,7 +41,9 @@ function plainState(source = state) {
         slots: [...source.slots],
         presence: source.presence,
         visit: source.visit,
-        requested: Object.assign({}, source.requested)
+        requested: Object.assign({}, source.requested),
+        mod: source.mod,
+        prof: source.prof
     };
 }
 
@@ -65,6 +69,8 @@ function readState(plain) {
     base.slots = base.slots.map((_, i) => (Array.isArray(plain.slots) && ids.has(plain.slots[i]) && i < base.tier) ? plain.slots[i] : null);
     base.presence = Boolean(plain.presence);
     base.visit = plain.visit && Array.isArray(plain.visit.slots) ? plain.visit : null;
+    base.mod = Number.isFinite(Number(plain.mod)) && plain.mod !== null && plain.mod !== '' ? Number(plain.mod) : null;
+    base.prof = Number.isFinite(Number(plain.prof)) && plain.prof !== null && plain.prof !== '' ? Number(plain.prof) : null;
     if (plain.requested && typeof plain.requested === 'object') {
         bond.parlor.items.forEach(item => {
             const count = number(plain.requested[item.id], 0);

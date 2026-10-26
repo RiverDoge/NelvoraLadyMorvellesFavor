@@ -24,9 +24,26 @@ const VEIL = [
 ];
 
 const LATCH = [[52, 34, 4], [80, 104, -3], [46, 174, 2], [76, 244, -4], [50, 314, 3], [80, 384, -2]];
+const BLANK_PAGE = ['054', '098', '029', '012', '118', '126'];
+const BOOK_HEIGHT = 910;
 
-let pages = [];
-let shown = 0;
+const RICH = new RegExp([
+    "(?<dice>\\b\\d+d\\d+\\b)",
+    "(?<save>\\b(?:Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) saving throws?\\b)",
+    "(?<dc>\\b(?:Scythe (?:Save )?DC|Spell Save DC|Save DC)\\b)",
+    "(?<act>\\bBonus Action\\b|\\bReaction\\b|\\bAction\\b)",
+    "(?<dmg>\\b(?:[Nn]ecrotic|[Tt]hunder|[Ss]lashing|[Pp]iercing|[Bb]ludgeoning)\\b|\\b(?:poison|force|psychic)(?= damage))",
+    "(?<adv>\\badvantage\\b)",
+    "(?<dis>\\bdisadvantage\\b)",
+    "(?<cond>\\b(?:knocked prone|prone|[Ss]tunned|Blindsight|immunity|temporary hit points|muffled)\\b)",
+    "(?<range>\\b\\d+(?: feet|-foot| ft\\.))",
+    "(?<charge>\\b\\d+ [Cc]harges?\\b)",
+    "(?<favor>\\b(?:\\d+|\\?\\?\\?) Favor\\b)"
+].join('|'), 'g');
+
+let spreads = [];
+let current = 0;
+let turning = false;
 let grantOpen = false;
 let sealedAt = 0;
 
@@ -47,6 +64,15 @@ function hearts(text) {
     return escapeHtml(text).replace(/&lt;3/g, '<span class="heart">&#9829;</span>');
 }
 
+function rich(text) {
+    return inline(text).split(/(<[^>]+>)/).map(part => part.startsWith('<') ? part : part.replace(RICH, (match, ...args) => {
+        const groups = args[args.length - 1];
+        const kind = Object.keys(groups).find(k => groups[k] !== undefined);
+        if (kind === 'dmg') return `<span class="dmg dmg-${match.toLowerCase()}">${match}</span>`;
+        return `<span class="k-${kind}">${match}</span>`;
+    })).join('');
+}
+
 function plain(title) {
     return title.replace(/\s*\([^)]*\)\s*$/, '');
 }
@@ -57,7 +83,7 @@ function aside(title) {
 
 function art(file, cut) {
     const src = file === 'obsidian-iris' ? 'assets/flowers/obsidian-iris.webp' : `assets/${cut ? 'flowers/f' : 'plates/p'}${file}.webp`;
-    return `<img src="${src}" alt="" loading="lazy">`;
+    return `<img src="${src}" alt="">`;
 }
 
 function label(pattern) {
@@ -82,9 +108,12 @@ function boxLabel(item, role) {
     return box ? box.label : '';
 }
 
+function refillOptions() {
+    return (bond.weapon.stats.find(s => /Refilling/i.test(s.label)) || { children: [] }).children;
+}
+
 function refillChoice() {
-    const refill = (bond.weapon.stats.find(s => /Refilling/i.test(s.label)) || { children: [] }).children;
-    return refill.find(child => /Presence/i.test(child.head) === state.presence) || { head: '', body: '' };
+    return refillOptions().find(child => /Presence/i.test(child.head) === state.presence) || { head: '', body: '' };
 }
 
 function showTier(instant = false) {
@@ -122,7 +151,7 @@ function renderSillScythe() {
     const host = $('sill-scythe');
     host.innerHTML = ownIds(`<svg viewBox="0 0 600 600"><g transform="rotate(${-ROD_ANGLE} ${ROD.x1} ${ROD.y1})">${scytheBody(beads, formOptions())}</g>${SCYTHE_DEFS}</svg>`) + `
         <div class="charge-count">${escapeHtml(label(/^Current Charges/i))}<b>${state.charges} / ${max}</b>
-            <button class="price refill" data-act="refill"${state.charges >= max || state.favor < 1 || sealed ? ' disabled' : ''}><strong>${escapeHtml(choice.head)}:</strong> ${inline(choice.body)}</button>
+            <button class="price refill" data-act="refill" title="${escapeHtml(choice.head)}"${state.charges >= max || state.favor < 1 || sealed ? ' disabled' : ''}>${rich(choice.body)}</button>
         </div>`;
     fitSvg(host.querySelector('svg'), 14);
 }
@@ -143,9 +172,10 @@ function renderPanes() {
 }
 
 function presenceButtons() {
-    const refill = (bond.weapon.stats.find(s => /Refilling/i.test(s.label)) || { children: [] }).children;
-    const names = refill.map(child => child.head).reverse();
-    return names.map((name, i) => `<button class="${(i === 1) === state.presence ? 'on' : ''}" data-near="${i}"${sealed ? ' disabled' : ''}>${escapeHtml(name)}</button>`).join('');
+    return refillOptions().slice().sort(a => /Presence/i.test(a.head) ? 1 : -1).map(child => {
+        const near = /Presence/i.test(child.head);
+        return `<button class="presence-icon ${near ? 'near' : 'afar'}${near === state.presence ? ' on' : ''}" data-near="${near ? 1 : 0}" title="${escapeHtml(child.head)}" aria-label="${escapeHtml(child.head)}"${sealed ? ' disabled' : ''}><span></span></button>`;
+    }).join('');
 }
 
 function renderLedger() {
@@ -156,7 +186,7 @@ function renderLedger() {
         <h2>Tier ${row.numeral}: ${hearts(row.title)}</h2>
         <div class="standing">${row.standing ? escapeHtml(row.standing) : hearts(row.title)}</div>
         <div class="favor">
-            <button class="coin glass" data-act="grant-open" aria-label="Grant"${sealed ? ' disabled' : ''}>${state.favor}</button>
+            <button class="coin glass" data-act="grant-open" aria-label="Grant"${sealed ? ' disabled' : ''}><span>${state.favor}</span></button>
             <span>${escapeHtml(label(/^Current Favor/i))}</span>
             <i>${escapeHtml(label(/^Lifetime/i))}: ${state.lifetime}</i>
         </div>
@@ -166,10 +196,10 @@ function renderLedger() {
             <button class="price" type="submit">Grant</button>
         </form>
         <div class="pair"><span>${escapeHtml(label(/^Upgrade Slots/i))}</span><em>${used} / ${row.slots}</em></div>
-        <div class="pair"><span>${escapeHtml(label(/^Active Passive Upkeep/i))}</span><em>${upkeep()} Favor / Month</em></div>
-        <div class="form"><span>${escapeHtml(label(/^Current Weapon Form/i))}</span>${weaponForm()}</div>
+        <div class="pair"><span>${escapeHtml(label(/^Active Passive Upkeep/i))}</span><em>${rich(`${upkeep()} Favor`)} / Month</em></div>
+        <div class="form"><span>${escapeHtml(label(/^Current Weapon Form/i))}</span>${rich(weaponForm())}</div>
         <div class="presence">${presenceButtons()}</div>`;
-    $('purse').textContent = state.favor;
+    $('purse').innerHTML = `<span>${state.favor}</span>`;
     $('presence-inside').innerHTML = presenceButtons();
     document.body.classList.toggle('presence-on', state.presence);
 }
@@ -177,7 +207,7 @@ function renderLedger() {
 function renderLatch() {
     const latch = $('latch');
     const tags = [
-        [plain(bond.weapon.title), 'weapon'],
+        [bond.title, 'weapon'],
         [bond.tiers.title, 'tiers'],
         [plain(bond.slotless.title), 'slotless'],
         [plain(bond.slotted.title), 'slotted'],
@@ -187,16 +217,14 @@ function renderLatch() {
     latch.innerHTML = '<span class="knob"></span>' + tags.map(([text, key], i) =>
         `<span class="string" data-i="${i}"></span><button class="tag" data-open="${key}" style="left:${LATCH[i][0]}px;top:${LATCH[i][1]}px;--r:${LATCH[i][2]}deg">${escapeHtml(text)}</button>`).join('');
     requestAnimationFrame(() => {
-        const kx = 19;
-        const ky = 13;
         latch.querySelectorAll('.tag').forEach((tag, i) => {
             const x = LATCH[i][0] + 18;
             const y = LATCH[i][1] + tag.offsetHeight / 2;
             const string = latch.querySelector(`.string[data-i="${i}"]`);
-            string.style.left = kx + 'px';
-            string.style.top = ky + 'px';
-            string.style.width = Math.hypot(x - kx, y - ky) + 'px';
-            string.style.transform = `rotate(${Math.atan2(y - ky, x - kx)}rad)`;
+            string.style.left = '19px';
+            string.style.top = '13px';
+            string.style.width = Math.hypot(x - 19, y - 13) + 'px';
+            string.style.transform = `rotate(${Math.atan2(y - 13, x - 19)}rad)`;
         });
     });
 }
@@ -211,7 +239,7 @@ function titleCard(title, group, extra = '') {
     return `
         <header class="page-title">
             <h2>${escapeHtml(title)}</h2>
-            ${group ? `<span class="group">${escapeHtml(group)}</span>` : ''}
+            ${group ? `<span class="group">${group}</span>` : ''}
             ${extra}
         </header>`;
 }
@@ -232,7 +260,7 @@ function corners() {
 
 function entryHtml(item, i = 0) {
     const [f, cut] = FLOWER[item.id] || ['141', 0];
-    const { rot, shift, sx } = jitter(item.id);
+    const { rot } = jitter(item.id);
     const locked = item.tier > state.tier;
     const owned = state.unlocked.has(item.id);
     const active = state.active.has(item.id);
@@ -246,7 +274,7 @@ function entryHtml(item, i = 0) {
             ${meta.buyout ? `<button class="term gold${bought ? ' woven' : ''}" data-act="buyout" data-id="${item.id}"${!owned || bought ? ' disabled' : ''}>${escapeHtml(meta.buyout)}</button>` : ''}
         </div>` : '';
     return `
-        <article class="${classes}" data-id="${item.id}" style="--rot:${rot}deg;--shift:${shift}px;--sx:${sx}%">
+        <article class="${classes}" data-id="${item.id}" style="--rot:${rot}deg">
             <button class="price" data-act="unlock" data-id="${item.id}"${locked ? ' disabled' : ''}>${escapeHtml(meta.price)}</button>
             <figure class="specimen ${cut ? 'scrap' : 'clipping'}">${art(f, cut)}${corners()}</figure>
             <div class="card">
@@ -254,29 +282,53 @@ function entryHtml(item, i = 0) {
                 <button class="pin" data-act="equip" data-id="${item.id}"${!owned ? ' disabled' : ''}${pinTitle} aria-label="${escapeHtml(boxLabel(item, 'active'))}"></button>
                 <h3>${escapeHtml(item.name)}</h3>
                 <div class="meta">${escapeHtml(meta.shown.join(' | '))}</div>
-                <p>${inline(item.text)}</p>
+                <p>${rich(item.text)}</p>
                 ${terms}
             </div>
             <div class="cover"><span class="etch">Tier ${(tierRow(item.tier) || {}).numeral || ''}</span></div>
         </article>`;
 }
 
-function itemsPage(title, items, extra = '') {
-    const leftCount = items.length > 5 ? 3 : 2;
-    return {
-        left: titleCard(title, '', extra) + `<div class="entries">${items.slice(0, leftCount).map((item, i) => entryHtml(item, i)).join('')}</div>`,
-        right: `<div class="entries">${items.slice(leftCount).map((item, i) => entryHtml(item, i + 1)).join('')}</div>`
-    };
+function signed(n) {
+    return n < 0 ? `&minus; ${Math.abs(n)}` : `+ ${n}`;
 }
 
-function weaponPage() {
+function rollHtml() {
+    const row = tierRow();
+    const bonus = parseInt(row.bonus, 10) || 0;
+    const mod = state.mod || 0;
+    const prof = state.prof || 0;
+    const on = id => state.active.has(id) && !state.owing.has(id);
+    const sickle = state.active.has('crescent-sickle-conversion');
+    let type = 'slashing';
+    if (state.active.has('crystalline-edge-piercing')) type = 'piercing';
+    if (state.active.has('crystalline-edge-pure-vitae')) type = 'necrotic';
+    if (state.active.has('crystalline-edge-tuning-glass')) type = 'thunder';
+    const flat = mod + bonus;
+    const hit = mod + prof + bonus;
+    let damage = `${sickle ? '1d8' : '1d10'}${flat ? ` ${signed(flat)}` : ''} ${type}`;
+    if (row.necrotic && !/none/i.test(row.necrotic)) damage += ` + ${row.necrotic.replace('+', '')} necrotic`;
+    const riders = [];
+    const part = name => bond.tiers.features.flatMap(f => f.parts.length ? f.parts : [{ name: f.name, text: f.text }]).find(p => p.name === name);
+    if (state.tier >= 3 && part("Crescendo's Hush")) riders.push([state.tier >= 5 && part("Crescendo's End") ? "Crescendo's End" : "Crescendo's Hush", `1 charge: + ${state.tier >= 5 ? '2d8' : '1d8'} necrotic`]);
+    if (state.tier >= 4 && part('Thunderous Expulsion')) riders.push([state.tier >= 6 && part('Resonant Expulsion') ? 'Resonant Expulsion' : 'Thunderous Expulsion', `+ ${state.tier >= 6 ? '1d10' : '1d8'} thunder`]);
+    if (on('underfoot-leverage')) riders.push([byId('underfoot-leverage').name, '+ 1d4']);
+    return `
+        <div class="roll">
+            <div><span>To Hit</span><b>${hit < 0 ? '&minus;' : '+'}${Math.abs(hit)}</b></div>
+            <div class="damage"><span>Damage</span><b>${rich(damage)}</b></div>
+        </div>
+        ${riders.length ? `<div class="riders">${riders.map(([name, text]) => `<div><em>${escapeHtml(name)}</em> ${rich(text)}</div>`).join('')}</div>` : ''}`;
+}
+
+function weaponBlocks() {
     const w = bond.weapon;
     const row = tierRow();
     const head = bond.tiers.headers;
     const scaling = [[head[3], row.bonus], [head[5], maxCharges()], [head[6], row.dc], [head[7], row.necrotic]];
     const stats = w.stats.map(stat => `
-        <div class="row"><b>${escapeHtml(stat.label)}</b>${inline(stat.text)}
-            ${stat.children.length ? `<ul>${stat.children.map(c => `<li><strong>${escapeHtml(c.head)}:</strong> ${inline(c.body)}</li>`).join('')}</ul>` : ''}
+        <div class="row"><b>${escapeHtml(stat.label)}</b>${rich(stat.text)}
+            ${stat.children.length ? `<ul>${stat.children.map(c => `<li><strong>${escapeHtml(c.head)}:</strong> ${rich(c.body)}</li>`).join('')}</ul>` : ''}
         </div>`).join('');
     const traitArt = [FLOWER['tainted-vitality'], FLOWER['the-expressive-muse']];
     const traits = w.traits.map((t, i) => {
@@ -288,35 +340,28 @@ function weaponPage() {
                     ${corners()}
                     <h3>${escapeHtml(t.name)}</h3>
                     <div class="meta">${escapeHtml(t.kind)}</div>
-                    <p>${inline(t.text)}</p>
+                    <p>${rich(t.text)}</p>
                 </div>
             </div>`;
-    }).join('');
-    return {
-        left: titleCard(plain(w.title), aside(w.title)) + `
-            <div class="showcase">
-                <div class="satin">
-                    <div class="specimen-glass">${scytheSvg('', '', formOptions({ mounts: [.3, .74] }))}</div>
-                </div>
-            </div>
-            <div class="plaque">
-                <div class="plaque-head">
-                    <span class="numeral glass">${row.numeral}</span>
-                    <div><h3>${hearts(row.title)}</h3>${row.standing ? `<i>${escapeHtml(row.standing)}</i>` : ''}</div>
-                </div>
-                <div class="big-stats">${scaling.map(([k, v]) => `<div><b>${escapeHtml(String(v))}</b><span>${escapeHtml(k)}</span></div>`).join('')}</div>
-                <div class="line"><span>${escapeHtml(label(/^Current Weapon Form/i))}</span><em>${weaponForm()}</em></div>
-                <div class="line"><span>${escapeHtml(label(/^Current Charges/i))}</span><em>${state.charges} / ${maxCharges()}</em></div>
-            </div>`,
-        right: `
-            <div class="paper-note" style="--rot:.5deg">
-                <span class="sub">${escapeHtml(w.subtitle)}</span>
-                ${w.text.map(t => `<p>${inline(t)}</p>`).join('')}
-            </div>
-            <div class="spec-card">${stats}</div>
-            <h2 class="subhead">${escapeHtml(w.traitsTitle)}</h2>
-            <div class="traits">${traits}</div>`
-    };
+    });
+    return [
+        titleCard(bond.title, `Tier ${row.numeral}: ${hearts(row.title)}`),
+        `<div class="showcase"><div class="satin"><div class="specimen-glass">${scytheSvg('', '', formOptions({ mounts: [.3, .74] }))}</div></div></div>`,
+        `<div class="plaque">
+            <div class="big-stats">${scaling.map(([k, v]) => `<div><b>${escapeHtml(String(v))}</b><span>${escapeHtml(k)}</span></div>`).join('')}</div>
+            <div class="roll-wrap" id="roll">${rollHtml()}</div>
+            <form class="stats-in" id="stats-in">
+                <label><span>Ability Modifier</span><input type="number" name="mod" step="1" value="${state.mod ?? ''}" placeholder="0"${sealed ? ' disabled' : ''}></label>
+                <label><span>Proficiency Bonus</span><input type="number" name="prof" step="1" value="${state.prof ?? ''}" placeholder="0"${sealed ? ' disabled' : ''}></label>
+            </form>
+            <div class="line"><span>${escapeHtml(label(/^Current Weapon Form/i))}</span><em>${rich(weaponForm())}</em></div>
+            <div class="line"><span>${escapeHtml(label(/^Current Charges/i))}</span><em>${state.charges} / ${maxCharges()}</em></div>
+        </div>`,
+        `<div class="paper-note" style="--rot:.5deg"><span class="sub">${escapeHtml(w.subtitle)}</span>${w.text.map(t => `<p>${rich(t)}</p>`).join('')}</div>`,
+        `<div class="spec-card"><h4 class="spec-title">${escapeHtml(plain(w.title))}</h4>${stats}</div>`,
+        `<h2 class="subhead">${escapeHtml(w.traitsTitle)}</h2>`,
+        ...traits
+    ];
 }
 
 function tierCard(row, i) {
@@ -325,8 +370,8 @@ function tierCard(row, i) {
     const next = n === state.tier + 1;
     const head = bond.tiers.headers;
     const features = bond.tiers.features.filter(f => f.tier === n).map(f => f.parts.length
-        ? f.parts.map(p => `<div class="feature"><h4>${escapeHtml(p.name)}</h4><p>${inline(p.text)}</p></div>`).join('')
-        : `<div class="feature"><h4>${escapeHtml(f.name)}</h4><p>${inline(f.text)}</p></div>`).join('');
+        ? f.parts.map(p => `<div class="feature"><h4>${escapeHtml(p.name)}</h4><p>${rich(p.text)}</p></div>`).join('')
+        : `<div class="feature"><h4>${escapeHtml(f.name)}</h4><p>${rich(f.text)}</p></div>`).join('');
     const [f, cut] = TIER_ART[i] || ['141', 0];
     const values = [row.costText, row.bonus, row.slots, row.charges, row.dc, row.necrotic];
     const classes = ['tier-card', 'entry', i % 2 ? 'alt' : '', reached ? 'reached owned' : next ? 'frosted' : 'sealed', n === state.tier ? 'current' : ''].join(' ');
@@ -342,37 +387,27 @@ function tierCard(row, i) {
                     <span class="numeral ${reached ? 'glass' : 'frost'}">${row.numeral}</span>
                     <div><h3>${hearts(row.title)}</h3>${row.standing ? `<i>${escapeHtml(row.standing)}</i>` : ''}</div>
                 </div>
-                <dl class="tier-stats">${values.map((v, k) => `<dt>${escapeHtml(head[k + 2])}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>
+                <dl class="tier-stats">${values.map((v, k) => `<dt>${escapeHtml(head[k + 2])}</dt><dd>${rich(String(v))}</dd>`).join('')}</dl>
                 ${features}
             </div>
             <div class="cover"><span class="etch">Tier ${row.numeral}</span></div>
         </article>`;
 }
 
-function tiersPage() {
-    const t = bond.tiers;
-    const cards = t.rows.map(tierCard);
-    return {
-        left: titleCard(t.title, '') + `<div class="paper-note" style="--rot:.6deg">${t.text.map(p => `<p>${inline(p)}</p>`).join('')}</div>
-            <div class="tier-list">${cards.slice(0, 3).join('')}</div>`,
-        right: `<div class="tier-list">${cards.slice(3).join('')}</div>`
-    };
-}
-
 function favorHtml(item, i) {
     const [f, cut, kind] = FLOWER[item.id] || ['141', 0, 'card'];
-    const { rot, shift, sx } = jitter(item.id, .7);
+    const { rot } = jitter(item.id, .7);
     const gated = item.req && state.tier < item.req;
     const count = state.requested[item.id] || 0;
     const meta = metaParts(item);
     return `
-        <article class="favor-card entry${i % 2 ? ' alt' : ''} ${gated ? 'sealed' : 'open'}${count ? ' requested' : ''}" data-id="${item.id}" style="--rot:${rot}deg;--shift:${shift}px;--sx:${sx}%">
+        <article class="favor-card entry${i % 2 ? ' alt' : ''} ${gated ? 'sealed' : 'open'}${count ? ' requested' : ''}" data-id="${item.id}" style="--rot:${rot}deg">
             <button class="price" data-act="request" data-id="${item.id}"${gated ? ' disabled' : ''}>${escapeHtml(meta.price)}</button>
             <figure class="favor-art ${cut ? 'scrap' : 'clipping'}${kind === 'sketch' ? ' charcoal' : ''}">${art(f, cut)}</figure>
             <div class="eph eph-${kind}">
                 <h3>${escapeHtml(item.name)}</h3>
                 ${meta.shown.length ? `<div class="meta">${escapeHtml(meta.shown.join(' | '))}</div>` : ''}
-                <p>${inline(item.text)}</p>
+                <p>${rich(item.text)}</p>
             </div>
             <div class="cover"><span class="etch">Tier ${(tierRow(item.req) || {}).numeral || ''}</span></div>
             <div class="wax glass">M</div>
@@ -380,27 +415,8 @@ function favorHtml(item, i) {
         </article>`;
 }
 
-function parlorPage() {
-    const p = bond.parlor;
-    const items = p.items.map(favorHtml);
-    return {
-        left: titleCard(plain(p.title), aside(p.title)) + `<div class="paper-note" style="--rot:-.5deg">${p.text.map(t => `<p>${inline(t)}</p>`).join('')}</div>
-            <div class="favors">${items.slice(0, 4).join('')}</div>`,
-        right: `<div class="favors">${items.slice(4).join('')}</div>`
-    };
-}
-
-function rulesPage() {
+function rulesBlocks() {
     const r = bond.rules;
-    const rules = r.items.map((rule, i) => `
-        <div class="rule" style="--rot:${[-.5, .4, -.3][i % 3]}deg">
-            <div class="seal-num glass">${i + 1}</div>
-            <div class="card">
-                ${corners()}
-                <h3>${escapeHtml(rule.name)}</h3>
-                <p>${inline(rule.text)}</p>
-            </div>
-        </div>`).join('');
     const loadoutRule = r.items.find(x => /Loadout/i.test(x.name));
     const upkeepRule = r.items.find(x => /Upkeep/i.test(x.name));
     const count = adjustments();
@@ -415,20 +431,24 @@ function rulesPage() {
             ${bought ? '<span></span>' : owing ? `<button class="price" data-act="settle" data-id="${item.id}">Settle</button>` : '<span class="ok"></span>'}
         </div>`;
     }).join('');
-    return {
-        left: titleCard(r.title, '') + `<div class="rule-list">${rules}</div>`,
-        right: `
-            <div class="panel" style="--rot:.4deg">
-                <h3>${escapeHtml(loadoutRule ? loadoutRule.name : '')}</h3>
-                ${state.presence ? `<div class="tally"><div class="coin glass">${visitCost(count)}</div><span>${count} ${count === 1 ? 'adjustment' : 'adjustments'}</span></div>`
-                    : `<p class="quiet">${escapeHtml(appointmentNote())}</p>`}
-            </div>
-            <div class="panel" style="--rot:-.5deg">
-                <h3>${escapeHtml(upkeepRule ? upkeepRule.name : '')}</h3>
-                ${rows || `<p class="quiet">${escapeHtml(label(/^Active Passive Upkeep/i))}: 0 Favor / Month</p>`}
-                <div class="panel-actions"><button class="price" data-act="month">New month</button></div>
-            </div>`
-    };
+    return [
+        titleCard(r.title, ''),
+        ...r.items.map((rule, i) => `
+            <div class="rule" style="--rot:${[-.5, .4, -.3][i % 3]}deg">
+                <div class="seal-num glass"><span>${i + 1}</span></div>
+                <div class="card">${corners()}<h3>${escapeHtml(rule.name)}</h3><p>${rich(rule.text)}</p></div>
+            </div>`),
+        `<div class="panel" style="--rot:.4deg">
+            <h3>${escapeHtml(loadoutRule ? loadoutRule.name : '')}</h3>
+            ${state.presence ? `<div class="tally"><div class="coin glass"><span>${visitCost(count)}</span></div><span>${count} ${count === 1 ? 'adjustment' : 'adjustments'}</span></div>`
+                : `<p class="quiet">${escapeHtml(appointmentNote())}</p>`}
+        </div>`,
+        `<div class="panel" style="--rot:-.5deg">
+            <h3>${escapeHtml(upkeepRule ? upkeepRule.name : '')}</h3>
+            ${rows || `<p class="quiet">${escapeHtml(label(/^Active Passive Upkeep/i))}: 0 Favor / Month</p>`}
+            <div class="panel-actions"><button class="price" data-act="month">New month</button></div>
+        </div>`
+    ];
 }
 
 function ledgerValue(row) {
@@ -439,8 +459,8 @@ function ledgerValue(row) {
     if (/^Lifetime/i.test(row.label)) return String(state.lifetime);
     if (/^Current Charges/i.test(row.label)) return `${state.charges} / ${maxCharges()}`;
     if (/^Upgrade Slots/i.test(row.label)) return `${state.slots.filter(Boolean).length} / ${tier.slots}`;
-    if (/^Active Passive Upkeep/i.test(row.label)) return `${upkeep()} Favor / Month`;
-    if (/^Current Weapon Form/i.test(row.label)) return weaponForm();
+    if (/^Active Passive Upkeep/i.test(row.label)) return `${rich(`${upkeep()} Favor`)} / Month`;
+    if (/^Current Weapon Form/i.test(row.label)) return rich(weaponForm());
     if (/^Active Slotted Loadout/i.test(row.label)) {
         const empty = (bond.ledger.loadout[0] || {}).value || '';
         const locked = (bond.ledger.loadout[1] || {}).value || '';
@@ -450,16 +470,16 @@ function ledgerValue(row) {
             return `<li class="${open ? '' : 'locked'}"><em>${escapeHtml(slot.label)}:</em> ${open ? escapeHtml(item ? item.name : empty) : escapeHtml(locked)}</li>`;
         }).join('')}</ul>`;
     }
-    return inline(row.value);
+    return rich(row.value);
 }
 
-function journalRows() {
+function journalRows(list, first) {
     const last = journal.length - 1;
-    return journal.slice().reverse().map((h, k) => {
+    return list.map((h, k) => {
         const when = new Date(h.t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
         const favor = h.f ? `<span class="d-favor">${h.f > 0 ? '+' : '&minus;'}${Math.abs(h.f)}</span>` : '';
         const charges = h.c ? `<span class="d-charge">${h.c > 0 ? '+' : '&minus;'}${Math.abs(h.c)}</span>` : '';
-        const canUndo = k === 0 && !sealed && journal[last] && journal[last].b;
+        const canUndo = first && k === 0 && !sealed && journal[last] && journal[last].b;
         return `
             <li class="${h.off ? 'off' : ''}">
                 <time>${escapeHtml(when)}</time>
@@ -470,38 +490,47 @@ function journalRows() {
     }).join('');
 }
 
-function ledgerPage() {
-    const rows = bond.ledger.rows.map(row => `<div class="row"><b>${escapeHtml(row.label)}</b>${ledgerValue(row)}</div>`).join('');
-    return {
-        left: titleCard(bond.ledger.title, '') + `
-            <div class="spec-card ledger-card">${rows}</div>
-            <div class="panel keepsake" style="--rot:-.4deg">
-                <h3>Save code</h3>
-                <textarea id="code-out" readonly rows="3" spellcheck="false"></textarea>
-                <div class="panel-actions">
-                    <button class="price" data-act="copy-code">Copy</button>
-                    <button class="price" data-act="copy-link">Link</button>
-                </div>
-                ${sealed ? '' : `
-                <textarea id="code-in" rows="2" spellcheck="false" placeholder="${CODE_PREFIX}"></textarea>
-                <div class="panel-actions"><button class="price" data-act="load-code">Load</button></div>`}
-            </div>`,
-        right: `<ol class="journal">${journalRows()}</ol>`
-    };
+function ledgerBlocks() {
+    const rows = bond.ledger.rows.map(row => `<div class="row"><b>${escapeHtml(row.label)}</b>${ledgerValue(row)}</div>`);
+    const split = rows.length - 1;
+    const recent = journal.slice().reverse();
+    const chunks = [];
+    for (let i = 0; i < Math.max(recent.length, 1); i += 14) chunks.push(recent.slice(i, i + 14));
+    return [
+        titleCard(bond.ledger.title, ''),
+        `<div class="spec-card ledger-card">${rows.slice(0, split).join('')}</div>`,
+        `<div class="spec-card ledger-card">${rows.slice(split).join('')}</div>`,
+        `<div class="panel keepsake" style="--rot:-.4deg">
+            <h3>Save code</h3>
+            <textarea id="code-out" readonly rows="3" spellcheck="false"></textarea>
+            <div class="panel-actions">
+                <button class="price" data-act="copy-code">Copy</button>
+                <button class="price" data-act="copy-link">Link</button>
+            </div>
+            ${sealed ? '' : `
+            <textarea id="code-in" rows="2" spellcheck="false" placeholder="${CODE_PREFIX}"></textarea>
+            <div class="panel-actions"><button class="price" data-act="load-code">Load</button></div>`}
+        </div>`,
+        ...chunks.map((chunk, i) => `<ol class="journal">${journalRows(chunk, i === 0)}</ol>`)
+    ];
 }
 
-function buildPages() {
+function sections() {
     const groups = bond.slotted.groups;
-    const links = current => `<div class="links">${groups.map((g, i) => `<button data-group="${i}" class="${i === current ? 'on' : ''}">${escapeHtml(g.title)}</button>`).join('')}</div>`;
-    pages = [
-        { key: 'weapon', tab: plain(bond.weapon.title), render: weaponPage },
-        { key: 'tiers', tab: bond.tiers.title, render: tiersPage },
-        { key: 'slotless', tab: plain(bond.slotless.title), render: () => itemsPage(plain(bond.slotless.title), bond.slotless.items) },
-        ...groups.map((g, i) => ({ key: 'slotted', tab: plain(bond.slotted.title), render: () => itemsPage(plain(bond.slotted.title), g.items, links(i)) })),
-        { key: 'parlor', tab: plain(bond.parlor.title), render: parlorPage },
-        { key: 'rules', tab: bond.rules.title, render: rulesPage },
-        { key: 'ledger', tab: bond.ledger.title, render: ledgerPage }
+    const links = active => `<div class="links">${groups.map((g, i) => `<button data-group="${i}" class="${i === active ? 'on' : ''}">${escapeHtml(g.title)}</button>`).join('')}</div>`;
+    const items = (title, list, extra) => [titleCard(title, '', extra), ...list.map((item, i) => entryHtml(item, i))];
+    return [
+        { key: 'weapon', tab: bond.title, blocks: weaponBlocks },
+        { key: 'tiers', tab: bond.tiers.title, blocks: () => [titleCard(bond.tiers.title, ''), `<div class="paper-note" style="--rot:.6deg">${bond.tiers.text.map(p => `<p>${rich(p)}</p>`).join('')}</div>`, ...bond.tiers.rows.map(tierCard)] },
+        { key: 'slotless', tab: plain(bond.slotless.title), blocks: () => items(plain(bond.slotless.title), bond.slotless.items) },
+        ...groups.map((g, gi) => ({ key: 'slotted', group: gi, tab: plain(bond.slotted.title), blocks: () => items(plain(bond.slotted.title), g.items, links(gi)) })),
+        { key: 'parlor', tab: plain(bond.parlor.title), blocks: () => [titleCard(plain(bond.parlor.title), escapeHtml(aside(bond.parlor.title))), `<div class="paper-note" style="--rot:-.5deg">${bond.parlor.text.map(t => `<p>${rich(t)}</p>`).join('')}</div>`, ...bond.parlor.items.map(favorHtml)] },
+        { key: 'rules', tab: bond.rules.title, blocks: rulesBlocks },
+        { key: 'ledger', tab: bond.ledger.title, blocks: ledgerBlocks }
     ];
+}
+
+function buildNotes() {
     const symbols = {
         weapon: scytheSvg('', '', { reach: .7 }),
         tiers: '<span class="sym-arch glass"></span>',
@@ -511,13 +540,99 @@ function buildPages() {
         rules: '<span class="sym-ruled"></span>',
         ledger: '<span class="sym-coin glass"></span>'
     };
-    const keys = [...new Set(pages.map(p => p.key))];
-    $('notes').innerHTML = keys.map(key =>
-        `<button class="note-tab" data-key="${key}"><span class="sym">${symbols[key]}</span><span>${escapeHtml(pages.find(p => p.key === key).tab)}</span></button>`).join('');
+    const seen = new Set();
+    $('notes').innerHTML = sections().filter(s => !seen.has(s.key) && seen.add(s.key)).map(s =>
+        `<button class="note-tab" data-key="${s.key}"><span class="sym">${symbols[s.key]}</span><span>${escapeHtml(s.tab)}</span></button>`).join('');
 }
 
-function pageIndex(key) {
-    return Math.max(0, pages.findIndex(p => p.key === key));
+function paginate(blocks) {
+    const probe = $('probe');
+    probe.innerHTML = blocks.map(b => `<div class="flow">${b}</div>`).join('');
+    const style = getComputedStyle(probe);
+    const room = probe.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    const gap = 26;
+    const pages = [[]];
+    let used = 0;
+    [...probe.children].forEach((el, i) => {
+        const h = el.offsetHeight;
+        if (used > 0 && used + h > room) {
+            pages.push([]);
+            used = 0;
+        }
+        pages[pages.length - 1].push(blocks[i]);
+        used += h + gap;
+    });
+    probe.innerHTML = '';
+    return pages;
+}
+
+function buildBook() {
+    const at = spreads[current] ? { key: spreads[current].key, group: spreads[current].group, offset: spreads[current].offset } : null;
+    spreads = [];
+    sections().forEach(section => {
+        const pages = paginate(section.blocks());
+        if (pages.length % 2) pages.push(null);
+        for (let i = 0; i < pages.length; i += 2) {
+            spreads.push({ key: section.key, group: section.group, offset: i / 2, left: pages[i], right: pages[i + 1] });
+        }
+    });
+    if (at) {
+        const match = spreads.findIndex(s => s.key === at.key && s.group === at.group && s.offset === at.offset);
+        const fallback = spreads.findIndex(s => s.key === at.key && s.group === at.group);
+        current = match > -1 ? match : Math.max(0, fallback);
+    }
+}
+
+function pageInner(blocks, side, index) {
+    const body = blocks
+        ? blocks.map(b => `<div class="flow">${b}</div>`).join('')
+        : `<div class="blank"><img src="assets/flowers/f${BLANK_PAGE[index % BLANK_PAGE.length]}.webp" alt=""></div>`;
+    const turn = side === 'left'
+        ? `<button class="turn prev" data-turn="-1" aria-label="&larr;"${index === 0 ? ' hidden' : ''}></button>`
+        : `<button class="turn next" data-turn="1" aria-label="&rarr;"${index === spreads.length - 1 ? ' hidden' : ''}></button>`;
+    return body + turn;
+}
+
+function showSpread() {
+    const spread = spreads[current];
+    $('left').innerHTML = pageInner(spread.left, 'left', current);
+    $('right').innerHTML = pageInner(spread.right, 'right', current);
+    document.querySelectorAll('.note-tab').forEach(b => b.classList.toggle('on', b.dataset.key === spread.key));
+    if ($('code-out')) fillCode();
+}
+
+function turnTo(target) {
+    if (turning || target === current || !spreads[target]) return;
+    const forward = target > current;
+    const from = spreads[current];
+    const to = spreads[target];
+    const block = $('spread');
+    const leaf = document.createElement('div');
+    leaf.className = `leaf ${forward ? 'next' : 'prev'}`;
+    leaf.innerHTML = `
+        <div class="face front"><section class="page ${forward ? 'right' : 'left'}">${pageInner(forward ? from.right : from.left, forward ? 'right' : 'left', current)}</section></div>
+        <div class="face back"><section class="page ${forward ? 'left' : 'right'}">${pageInner(forward ? to.left : to.right, forward ? 'left' : 'right', target)}</section></div>`;
+    turning = true;
+    const old = current;
+    current = target;
+    if (forward) $('right').innerHTML = pageInner(to.right, 'right', target);
+    else $('left').innerHTML = pageInner(to.left, 'left', target);
+    block.appendChild(leaf);
+    document.querySelectorAll('.note-tab').forEach(b => b.classList.toggle('on', b.dataset.key === to.key));
+    requestAnimationFrame(() => requestAnimationFrame(() => leaf.classList.add('turning')));
+    const done = () => {
+        if (!leaf.isConnected) return;
+        showSpread();
+        leaf.remove();
+        turning = false;
+    };
+    leaf.addEventListener('transitionend', e => { if (e.target === leaf) done(); });
+    setTimeout(done, 1400);
+    if (old === current) done();
+}
+
+function sectionStart(key, group) {
+    return Math.max(0, spreads.findIndex(s => s.key === key && (group === undefined || s.group === group)));
 }
 
 function fillCode() {
@@ -526,45 +641,29 @@ function fillCode() {
     makeCode().then(code => { out.value = code; }).catch(() => { out.value = ''; });
 }
 
-function renderPage(direction) {
-    const page = pages[shown];
-    const html = page.render();
-    $('left').innerHTML = html.left + `<button class="turn prev" data-turn="-1" aria-label="&larr;"${shown === 0 ? ' hidden' : ''}></button>`;
-    $('right').innerHTML = html.right + `<button class="turn next" data-turn="1" aria-label="&rarr;"${shown === pages.length - 1 ? ' hidden' : ''}></button>`;
-    document.querySelectorAll('.note-tab').forEach(b => b.classList.toggle('on', b.dataset.key === page.key));
-    if (page.key === 'ledger') fillCode();
-    if (direction) {
-        const spread = $('spread');
-        spread.style.setProperty('--from', direction > 0 ? '40px' : '-40px');
-        spread.classList.remove('flipping');
-        void spread.offsetWidth;
-        spread.classList.add('flipping');
-    }
-}
-
 function refreshEntry(id) {
-    const old = document.querySelector(`.entry[data-id="${id}"]:not(.favor-card)`);
-    if (!old) return;
-    const tmp = document.createElement('div');
-    tmp.innerHTML = entryHtml(byId(id), old.classList.contains('alt') ? 1 : 0).trim();
-    const fresh = tmp.firstChild;
-    old.className = fresh.className;
-    ['.price', '.specimen', '.card'].forEach(sel => old.querySelector(sel).replaceWith(fresh.querySelector(sel)));
+    document.querySelectorAll(`.page .entry[data-id="${id}"]:not(.favor-card)`).forEach(old => {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = entryHtml(byId(id), old.classList.contains('alt') ? 1 : 0).trim();
+        const fresh = tmp.firstChild;
+        old.className = fresh.className;
+        ['.price', '.specimen', '.card'].forEach(sel => old.querySelector(sel).replaceWith(fresh.querySelector(sel)));
+    });
 }
 
 function refreshFavor(id) {
-    const old = document.querySelector(`.favor-card[data-id="${id}"]`);
-    if (!old) return;
     const item = bond.parlor.items.find(i => i.id === id);
-    const tmp = document.createElement('div');
-    tmp.innerHTML = favorHtml(item, old.classList.contains('alt') ? 1 : 0).trim();
-    const fresh = tmp.firstChild;
-    old.className = fresh.className;
-    const times = old.querySelector('.times');
-    if (times) times.remove();
-    const freshTimes = fresh.querySelector('.times');
-    if (freshTimes) old.appendChild(freshTimes);
-    old.querySelector('.price').replaceWith(fresh.querySelector('.price'));
+    document.querySelectorAll(`.page .favor-card[data-id="${id}"]`).forEach(old => {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = favorHtml(item, old.classList.contains('alt') ? 1 : 0).trim();
+        const fresh = tmp.firstChild;
+        old.className = fresh.className;
+        const times = old.querySelector('.times');
+        if (times) times.remove();
+        const freshTimes = fresh.querySelector('.times');
+        if (freshTimes) old.appendChild(freshTimes);
+        old.querySelector('.price').replaceWith(fresh.querySelector('.price'));
+    });
 }
 
 function isInside() {
@@ -576,12 +675,12 @@ function peer(key) {
     const center = document.querySelector('.pane.center').getBoundingClientRect();
     const box = home.getBoundingClientRect();
     home.style.transformOrigin = `${center.left - box.left + center.width / 2}px ${center.top - box.top + center.height * .35}px`;
-    shown = pageIndex(key);
-    renderPage();
-    home.classList.add('peering');
     $('inside').classList.add('open');
-    $('inside').scrollTop = 0;
     fitScene();
+    buildBook();
+    current = sectionStart(key);
+    showSpread();
+    home.classList.add('peering');
     setTimeout(() => home.classList.add('away'), 1250);
 }
 
@@ -601,10 +700,9 @@ function refuse(el) {
 }
 
 function rerender() {
-    if (isInside()) {
-        const scroll = $('inside').scrollTop;
-        renderPage();
-        $('inside').scrollTop = scroll;
+    if (isInside() && !turning) {
+        buildBook();
+        showSpread();
     }
     renderHome();
 }
@@ -762,8 +860,7 @@ function act(button) {
     }
 
     if (kind === 'load-code') {
-        const field = $('code-in');
-        readCode(field.value).then(loaded => {
+        readCode($('code-in').value).then(loaded => {
             state = loaded.state;
             commit('Save code', '', before);
             showTier();
@@ -817,10 +914,7 @@ function copyText(text) {
 }
 
 function copyCode(button, asLink) {
-    makeCode().then(code => {
-        const text = asLink ? `${location.origin}${location.pathname}#seal=${code}` : code;
-        return copyText(text);
-    }).then(() => {
+    makeCode().then(code => copyText(asLink ? `${location.origin}${location.pathname}#seal=${code}` : code)).then(() => {
         button.classList.remove('copied');
         void button.offsetWidth;
         button.classList.add('copied');
@@ -829,15 +923,13 @@ function copyCode(button, asLink) {
 
 function fitScene() {
     const width = document.documentElement.clientWidth || window.innerWidth;
-    const inner = $('inside').clientWidth || width;
-    const scene = Math.max(.55, Math.min(width / 1440, window.innerHeight / 900));
-    const book = Math.min(1.3, Math.max(.7, inner / 1440));
-    $('scene').style.zoom = scene;
-    document.querySelector('.book-wrap').style.zoom = book;
+    const height = window.innerHeight;
+    $('scene').style.zoom = Math.max(.55, Math.min(width / 1440, height / 900));
+    document.querySelector('.book-wrap').style.zoom = Math.max(.55, Math.min(width / 1440, height / BOOK_HEIGHT));
 }
 
 const music = $('music');
-const MUSIC_VOLUME = .32;
+const MUSIC_VOLUME = .26;
 let musicFade = null;
 let musicWanted = true;
 
@@ -906,53 +998,43 @@ document.addEventListener('click', e => {
     const opener = e.target.closest('[data-open]');
     if (opener) return peer(opener.dataset.open);
     const tab = e.target.closest('.note-tab');
-    if (tab) {
-        const next = pageIndex(tab.dataset.key);
-        const dir = Math.sign(next - shown);
-        shown = next;
-        $('inside').scrollTop = 0;
-        return renderPage(dir);
-    }
+    if (tab) return turnTo(sectionStart(tab.dataset.key));
     const group = e.target.closest('[data-group]');
-    if (group) {
-        const next = pageIndex('slotted') + Number(group.dataset.group);
-        const dir = Math.sign(next - shown);
-        shown = next;
-        return renderPage(dir);
-    }
+    if (group) return turnTo(sectionStart('slotted', Number(group.dataset.group)));
     const turn = e.target.closest('[data-turn]');
-    if (turn) {
-        shown += Number(turn.dataset.turn);
-        $('inside').scrollTop = 0;
-        return renderPage(Number(turn.dataset.turn));
-    }
+    if (turn) return turnTo(current + Number(turn.dataset.turn));
     const action = e.target.closest('[data-act]');
     if (action) {
         if (action.disabled || (action.getAttribute && action.getAttribute('disabled') !== null)) return;
         return act(action);
     }
-    const near = e.target.closest('.presence button');
-    if (near) {
+    const near = e.target.closest('.presence-icon');
+    if (near && !near.disabled) {
         setPresence(near.dataset.near === '1');
         return rerender();
     }
 });
 
 document.addEventListener('submit', e => {
-    if (e.target.id !== 'grant') return;
     e.preventDefault();
-    grantFrom(e.target);
+    if (e.target.id === 'grant') grantFrom(e.target);
+});
+
+document.addEventListener('input', e => {
+    const form = e.target.closest('#stats-in');
+    if (!form || sealed) return;
+    const read = value => value === '' ? null : Math.round(Number(value)) || 0;
+    state.mod = read(form.mod.value);
+    state.prof = read(form.prof.value);
+    save();
+    $('roll').innerHTML = rollHtml();
 });
 
 document.addEventListener('keydown', e => {
     if (!isInside() || (e.target.closest && e.target.closest('input, textarea'))) return;
     if (e.key === 'Escape') return stepBack();
     const step = { ArrowLeft: -1, ArrowRight: 1 }[e.key];
-    if (step && pages[shown + step]) {
-        shown += step;
-        $('inside').scrollTop = 0;
-        renderPage(step);
-    }
+    if (step) turnTo(current + step);
 });
 
 $('back').addEventListener('click', stepBack);
@@ -984,17 +1066,16 @@ document.addEventListener('pointerdown', firstGesture, true);
 document.addEventListener('keydown', firstGesture, true);
 startMusic();
 
-Promise.all([loadBond(), loadScythe()]).then(([data]) => {
+Promise.all([loadBond(), loadScythe(), document.fonts ? document.fonts.ready : null]).then(([data]) => {
     bond = data;
     const seal = location.hash.match(/^#seal=(.+)$/);
-    const ready = seal ? openSeal(seal[1]) : Promise.resolve(loadSaved());
-    return ready;
+    return seal ? openSeal(seal[1]) : loadSaved();
 }).then(() => {
     $('title').textContent = bond.title;
     $('subtitle').textContent = bond.subtitle;
     renderVeil();
     renderCrest();
-    buildPages();
+    buildNotes();
     renderLatch();
     renderHome();
     showTier(true);
