@@ -306,8 +306,8 @@ function readBond(markdown) {
     const titleSection = sections.find(section => section.level === 1);
     const weaponSection = findSection(sections, /^Base Weapon/i, 2);
     const tierSection = findSection(sections, /Tiers of Patronage/i, 2);
-    const slotlessSection = findSection(sections, /^Slotless/i, 2);
-    const slottedSection = findSection(sections, /^Slotted/i, 2);
+    const slotlessSection = findSection(sections, /^(Slotless\s+)?Alterations|^Slotless/i, 2);
+    const slottedSection = findSection(sections, /^(Slotted\s+)?Upgrades|^Slotted/i, 2);
     const parlorSection = findSection(sections, /Parlor/i, 2);
     const rulesSection = findSection(sections, /Reforging|Upkeep Rules/i, 2);
 

@@ -77,6 +77,10 @@ function plain(title) {
     return title.replace(/\s*\([^)]*\)\s*$/, '');
 }
 
+function shortTitle(title) {
+    return plain(title).replace(/^Slot(?:less|ted)\s+/i, '');
+}
+
 function aside(title) {
     return (title.match(/\(([^)]*)\)\s*$/) || [])[1] || '';
 }
@@ -209,8 +213,8 @@ function renderLatch() {
     const tags = [
         [bond.title, 'weapon'],
         [bond.tiers.title, 'tiers'],
-        [plain(bond.slotless.title), 'slotless'],
-        [plain(bond.slotted.title), 'slotted'],
+        [shortTitle(bond.slotless.title), 'slotless'],
+        [shortTitle(bond.slotted.title), 'slotted'],
         [plain(bond.parlor.title), 'parlor'],
         [bond.rules.title, 'rules']
     ];
@@ -522,8 +526,8 @@ function sections() {
     return [
         { key: 'weapon', tab: bond.title, blocks: weaponBlocks },
         { key: 'tiers', tab: bond.tiers.title, blocks: () => [titleCard(bond.tiers.title, ''), `<div class="paper-note" style="--rot:.6deg">${bond.tiers.text.map(p => `<p>${rich(p)}</p>`).join('')}</div>`, ...bond.tiers.rows.map(tierCard)] },
-        { key: 'slotless', tab: plain(bond.slotless.title), blocks: () => items(plain(bond.slotless.title), bond.slotless.items) },
-        ...groups.map((g, gi) => ({ key: 'slotted', group: gi, tab: plain(bond.slotted.title), blocks: () => items(plain(bond.slotted.title), g.items, links(gi)) })),
+        { key: 'slotless', tab: shortTitle(bond.slotless.title), blocks: () => items(shortTitle(bond.slotless.title), bond.slotless.items) },
+        ...groups.map((g, gi) => ({ key: 'slotted', group: gi, tab: shortTitle(bond.slotted.title), blocks: () => items(shortTitle(bond.slotted.title), g.items, links(gi)) })),
         { key: 'parlor', tab: plain(bond.parlor.title), blocks: () => [titleCard(plain(bond.parlor.title), escapeHtml(aside(bond.parlor.title))), `<div class="paper-note" style="--rot:-.5deg">${bond.parlor.text.map(t => `<p>${rich(t)}</p>`).join('')}</div>`, ...bond.parlor.items.map(favorHtml)] },
         { key: 'rules', tab: bond.rules.title, blocks: rulesBlocks },
         { key: 'ledger', tab: bond.ledger.title, blocks: ledgerBlocks }
@@ -618,10 +622,14 @@ function turnTo(target) {
     leaf.className = `leaf ${forward ? 'next' : 'prev'}`;
     const faceFront = document.createElement('div');
     faceFront.className = 'face recto';
-    faceFront.appendChild(front);
+    const shadeFront = document.createElement('div');
+    shadeFront.className = 'shade';
+    faceFront.append(front, shadeFront);
     const faceBack = document.createElement('div');
     faceBack.className = 'face verso';
-    faceBack.appendChild(back);
+    const shadeBack = document.createElement('div');
+    shadeBack.className = 'shade';
+    faceBack.append(back, shadeBack);
     leaf.append(faceFront, faceBack);
     turning = true;
     current = target;
@@ -629,8 +637,6 @@ function turnTo(target) {
     document.querySelectorAll('.note-tab').forEach(b => b.classList.toggle('on', b.dataset.key === to.key));
     const images = [...back.querySelectorAll('img'), ...lifted.querySelectorAll('img')];
     const decoded = Promise.all(images.map(img => img.decode ? img.decode().catch(() => {}) : null));
-    Promise.race([decoded, new Promise(resolve => setTimeout(resolve, 250))])
-        .then(() => requestAnimationFrame(() => leaf.classList.add('turning')));
     let finished = false;
     const done = () => {
         if (finished) return;
@@ -640,8 +646,14 @@ function turnTo(target) {
         turning = false;
         if ($('code-out')) fillCode();
     };
-    leaf.addEventListener('transitionend', e => { if (e.target === leaf) done(); });
-    setTimeout(done, 1800);
+    Promise.race([decoded, new Promise(resolve => setTimeout(resolve, 250))])
+        .then(() => requestAnimationFrame(() => {
+            const timing = { duration: 950, easing: 'cubic-bezier(.42, .02, .28, 1)', fill: 'forwards' };
+            leaf.animate([{ transform: 'rotateY(0deg)' }, { transform: `rotateY(${forward ? -180 : 180}deg)` }], timing).finished.then(done, done);
+            shadeFront.animate([{ opacity: 0 }, { opacity: 1, offset: .5 }, { opacity: 1 }], timing);
+            shadeBack.animate([{ opacity: 1 }, { opacity: 1, offset: .5 }, { opacity: 0 }], timing);
+        }));
+    setTimeout(done, 2500);
 }
 
 function sectionStart(key, group) {

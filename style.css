@@ -473,7 +473,7 @@ body.sealed .bead-svg { cursor: default; }
 }
 
 .coin, .purse, .seal-num { font-variant-numeric: lining-nums; }
-.coin > span, .purse > span, .seal-num > span { display: block; line-height: 1; transform: translateY(-.04em); }
+.coin > span, .purse > span, .seal-num > span { display: block; line-height: 1; font-variant-numeric: lining-nums; transform: translateY(.03em); }
 
 .card-ledger .form .dmg, .plaque .dmg { font-style: italic; }
 
