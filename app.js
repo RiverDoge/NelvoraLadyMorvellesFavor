@@ -177,12 +177,12 @@ function renderSillScythe() {
     host.innerHTML = ownIds(`<svg viewBox="0 0 600 600"><g transform="rotate(${-ROD_ANGLE} ${ROD.x1} ${ROD.y1})">${scytheBody(beads, formOptions())}</g>${SCYTHE_DEFS}</svg>`) + `
         <div class="charge-count">${chargeDraft === null
             ? `<span class="refill-note" title="${escapeHtml(choice.head)}">${rich(choice.body)}</span>`
-            : `<button class="charges-cancel" data-act="charges-cancel" aria-label="Cancel">&times;</button>
-               <button class="price confirm" data-act="charges-confirm"${cost > state.favor ? ' disabled' : ''}>Confirm${cost ? ` &middot; ${rich(`${cost} Favor`)}` : ''}</button>`}
+            : `<button class="price confirm" data-act="charges-confirm"${cost > state.favor ? ' disabled' : ''}>Confirm${cost ? ` &middot; ${rich(`${cost} Favor`)}` : ''}</button>
+               <button class="charges-cancel" data-act="charges-cancel" aria-label="Cancel">&times;</button>`}
         </div>`;
     fitSvg(host.querySelector('svg'), 14, true);
     const view = host.querySelector('svg').viewBox.baseVal;
-    host.querySelector('.charge-count').style.marginTop = `calc(${((ROD.y1 + 14 - view.y) / view.width * 100).toFixed(2)}% + 8px)`;
+    host.querySelector('.charge-count').style.marginTop = `calc(${((ROD.y1 + 14 - view.y) / view.width * 100).toFixed(2)}% + 14px)`;
 }
 
 function renderPanes() {
