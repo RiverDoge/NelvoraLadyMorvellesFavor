@@ -46,6 +46,7 @@ const RICH = new RegExp([
 let spreads = [];
 let current = 0;
 let turning = false;
+let chargeDraft = null;
 let grantOpen = false;
 let sealedAt = 0;
 
@@ -156,19 +157,32 @@ function renderCrest() {
 function renderSillScythe() {
     const max = maxCharges();
     clampCharges();
+    if (chargeDraft !== null) chargeDraft = Math.max(0, Math.min(max, chargeDraft));
+    if (chargeDraft === state.charges) chargeDraft = null;
+    const target = chargeDraft ?? state.charges;
     const span = formOptions().reach;
     const beads = Array.from({ length: max }, (_, i) => {
         const [x, y] = rodPoint(span * (max > 1 ? .12 + i * (.76 / (max - 1)) : .5));
-        const full = i < state.charges;
-        return `<circle class="bead-svg" data-act="${full ? 'spend' : 'refill'}" cx="${x}" cy="${y}" r="12.5" fill="url(#bead-${full ? 'glass' : 'empty'})" stroke="${full ? '#4b0412' : '#9e1230'}" stroke-opacity="${full ? '.4' : '.55'}" stroke-width="${full ? 1 : 1.4}"${full ? ' filter="url(#bead-glow)"' : ''}/>`;
+        const now = i < state.charges;
+        const full = i < target;
+        const pending = now !== full ? (now ? ' leaving' : ' coming') : '';
+        const look = pending
+            ? `fill="url(#bead-glass)" stroke="#9e1230" stroke-opacity=".7" stroke-width="1.4" stroke-dasharray="3 3"`
+            : `fill="url(#bead-${full ? 'glass' : 'empty'})" stroke="${full ? '#4b0412' : '#9e1230'}" stroke-opacity="${full ? '.4' : '.55'}" stroke-width="${full ? 1 : 1.4}"${full ? ' filter="url(#bead-glow)"' : ''}`;
+        return `<circle class="bead-svg${pending}" data-act="bead" data-i="${i}" cx="${x}" cy="${y}" r="12.5" ${look}/>`;
     }).join('');
     const choice = refillChoice();
+    const cost = target > state.charges ? Math.ceil((target - state.charges) / refillRate()) : 0;
     const host = $('sill-scythe');
     host.innerHTML = ownIds(`<svg viewBox="0 0 600 600"><g transform="rotate(${-ROD_ANGLE} ${ROD.x1} ${ROD.y1})">${scytheBody(beads, formOptions())}</g>${SCYTHE_DEFS}</svg>`) + `
-        <div class="charge-count">${escapeHtml(label(/^Current Charges/i))}<b>${state.charges} / ${max}</b>
-            <button class="price refill" data-act="refill" title="${escapeHtml(choice.head)}"${state.charges >= max || state.favor < 1 || sealed ? ' disabled' : ''}>${rich(choice.body)}</button>
+        <div class="charge-count">${chargeDraft === null
+            ? `<span class="refill-note" title="${escapeHtml(choice.head)}">${rich(choice.body)}</span>`
+            : `<button class="charges-cancel" data-act="charges-cancel" aria-label="Cancel">&times;</button>
+               <button class="price confirm" data-act="charges-confirm"${cost > state.favor ? ' disabled' : ''}>Confirm${cost ? ` &middot; ${rich(`${cost} Favor`)}` : ''}</button>`}
         </div>`;
     fitSvg(host.querySelector('svg'), 14, true);
+    const view = host.querySelector('svg').viewBox.baseVal;
+    host.querySelector('.charge-count').style.marginTop = `calc(${((ROD.y1 + 14 - view.y) / view.width * 100).toFixed(2)}% + 8px)`;
 }
 
 function renderPanes() {
@@ -711,6 +725,7 @@ function peer(key) {
     const center = document.querySelector('.pane.center').getBoundingClientRect();
     const box = home.getBoundingClientRect();
     home.style.transformOrigin = `${center.left - box.left + center.width / 2}px ${center.top - box.top + center.height * .35}px`;
+    chargeDraft = null;
     $('inside').classList.add('open');
     fitScene();
     buildBook();
@@ -736,10 +751,15 @@ function refuse(el) {
 }
 
 function rerender() {
-    if (isInside() && !turning) {
+    if (isInside()) {
         buildBook();
-        showSpread();
+        if (!turning) showSpread();
     }
+    renderHome();
+}
+
+function afterChange() {
+    if (isInside()) buildBook();
     renderHome();
 }
 
@@ -787,7 +807,7 @@ function act(button) {
         state.unlocked.add(id);
         commit(boxLabel(item, 'unlocked'), item.name, before);
         refreshEntry(id);
-        return renderHome();
+        return afterChange();
     }
 
     if (kind === 'equip') {
@@ -817,7 +837,7 @@ function act(button) {
         commit(boxLabel(item, 'active'), item.name, before, wasActive);
         if (isSlotless(item)) bond.slotless.items.filter(x => x.id.startsWith('crystalline-edge')).forEach(x => refreshEntry(x.id));
         refreshEntry(id);
-        return renderHome();
+        return afterChange();
     }
 
     if (kind === 'buyout') {
@@ -829,7 +849,7 @@ function act(button) {
         clampCharges();
         commit(boxLabel(item, 'bought'), item.name, before);
         refreshEntry(id);
-        return renderHome();
+        return afterChange();
     }
 
     if (kind === 'ascend') {
@@ -851,7 +871,7 @@ function act(button) {
         state.requested[id] = (state.requested[id] || 0) + 1;
         commit(plain(bond.parlor.title), item.name, before);
         refreshFavor(id);
-        return renderHome();
+        return afterChange();
     }
 
     if (kind === 'settle') {
@@ -872,20 +892,32 @@ function act(button) {
         return rerender();
     }
 
-    if (kind === 'spend') {
-        if (state.charges < 1) return refuse(button);
-        state.charges -= 1;
-        commit(label(/^Current Charges/i), '', before);
-        return rerender();
+    if (kind === 'bead') {
+        const i = Number(button.dataset.i);
+        const target = chargeDraft ?? state.charges;
+        chargeDraft = i < target ? i : i + 1;
+        return renderSillScythe();
     }
 
-    if (kind === 'refill') {
-        const max = maxCharges();
-        if (state.charges >= max || state.favor < 1) return refuse(button);
-        state.favor -= 1;
-        state.charges = Math.min(max, state.charges + refillRate());
-        const choice = refillChoice();
-        commit(choice.head, choice.body, before);
+    if (kind === 'charges-cancel') {
+        chargeDraft = null;
+        return renderSillScythe();
+    }
+
+    if (kind === 'charges-confirm') {
+        const target = Math.min(maxCharges(), chargeDraft ?? state.charges);
+        if (target > state.charges) {
+            const cost = Math.ceil((target - state.charges) / refillRate());
+            if (state.favor < cost) return refuse(button);
+            state.favor -= cost;
+            state.charges = target;
+            const choice = refillChoice();
+            commit(choice.head, choice.body, before);
+        } else if (target < state.charges) {
+            state.charges = target;
+            commit(label(/^Current Charges/i), '', before);
+        }
+        chargeDraft = null;
         return rerender();
     }
 
@@ -920,7 +952,7 @@ function askAmount(button, item) {
         state.requested[item.id] = (state.requested[item.id] || 0) + 1;
         commit(plain(bond.parlor.title), item.name, before);
         refreshFavor(item.id);
-        renderHome();
+        afterChange();
     });
 }
 
@@ -1064,6 +1096,7 @@ document.addEventListener('input', e => {
     state.prof = read(form.prof.value);
     save();
     $('roll').innerHTML = rollHtml();
+    afterChange();
 });
 
 document.addEventListener('keydown', e => {
@@ -1079,6 +1112,7 @@ $('music-toggle').addEventListener('click', () => setMusic(!musicWanted));
 window.addEventListener('resize', fitScene);
 window.addEventListener('storage', e => {
     if (e.key !== SAVE_KEY || sealed) return;
+    chargeDraft = null;
     loadSaved();
     showTier();
     rerender();
